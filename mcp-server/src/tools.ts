@@ -523,6 +523,85 @@ export const TOOLS: ToolDef[] = [
     inputSchema: { slotA: z.number().int().min(0).max(45), slotB: z.number().int().min(0).max(45) },
   },
 
+  // ===== gui (client) ========================================================================
+  {
+    name: "gui_list",
+    method: "gui.list",
+    title: "Inspect the open screen",
+    description:
+      "Client-only. Describe the screen currently open in the client (inventory, chest, shop, menu, ...): screen class, title, container info, and the list of clickable widgets with index, type, text, position and size. Use the returned index/text with gui_click.",
+    inputSchema: {},
+    annotations: READ,
+  },
+  {
+    name: "gui_click",
+    method: "gui.click",
+    title: "Click a GUI widget",
+    description:
+      "Client-only. Click a widget of the open screen: by widget index or label text (from gui_list), or by raw screen coordinates x/y. button is left (default), right or middle.",
+    inputSchema: {
+      index: z.number().int().min(0).optional().describe("Widget index from gui_list."),
+      text: z.string().optional().describe("Case-insensitive substring of the widget label."),
+      x: z.number().optional().describe("Raw screen X (together with y) instead of index/text."),
+      y: z.number().optional().describe("Raw screen Y (together with x) instead of index/text."),
+      button: z.enum(["left", "right", "middle"]).optional().default("left"),
+    },
+  },
+  {
+    name: "gui_type",
+    method: "gui.type",
+    title: "Type text into the open screen",
+    description:
+      "Client-only. Type text into the focused field of the open screen (click the field first with gui_click). Set clear=true to empty the focused field first, enter=true to press Enter afterwards.",
+    inputSchema: {
+      text: z.string(),
+      clear: z.boolean().optional().default(false),
+      enter: z.boolean().optional().default(false),
+    },
+  },
+  {
+    name: "gui_key",
+    method: "gui.key",
+    title: "Press a key on the open screen",
+    description:
+      'Client-only. Send a key press to the open screen, e.g. "escape" to close it, "enter" to confirm. Accepts a named key or a raw GLFW keyCode.',
+    inputSchema: {
+      key: z
+        .string()
+        .optional()
+        .describe("Key name: escape, enter, tab, space, backspace, delete, up, down, left, right, home, end, pageup, pagedown."),
+      keyCode: z.number().int().optional().describe("Raw GLFW key code (alternative to key)."),
+    },
+  },
+  {
+    name: "gui_close",
+    method: "gui.close",
+    title: "Close the open screen",
+    description: "Client-only. Close whatever screen is currently open (equivalent to pressing Escape).",
+    inputSchema: {},
+  },
+  {
+    name: "container_read",
+    method: "container.read",
+    title: "Read the open container",
+    description:
+      "Client-only. Read the container menu currently open (chest, shop, machine, ...): title, menu id, slot count, and the non-empty slots with item id/count/name and whether they belong to the player inventory.",
+    inputSchema: {},
+    annotations: READ,
+  },
+  {
+    name: "container_click",
+    method: "container.click",
+    title: "Click a container slot",
+    description:
+      "Client-only. Click a slot of the open container: mode pickup (default), quick_move (shift-click), throw or swap. button left (default) or right. Slot numbers come from container_read.",
+    inputSchema: {
+      slot: z.number().int().min(0).describe("Menu slot index (from container_read)."),
+      mode: z.enum(["pickup", "quick_move", "throw", "swap"]).optional().default("pickup"),
+      button: z.enum(["left", "right"]).optional().default("left"),
+    },
+  },
+
   // ===== vision (client) =====================================================================
   {
     name: "screenshot",

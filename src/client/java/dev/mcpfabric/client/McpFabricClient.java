@@ -4,6 +4,7 @@ import dev.mcpfabric.McpFabric;
 import dev.mcpfabric.bridge.RpcRouter;
 import dev.mcpfabric.client.handlers.ClientChatHandlers;
 import dev.mcpfabric.client.handlers.ControlHandlers;
+import dev.mcpfabric.client.handlers.GuiHandlers;
 import dev.mcpfabric.client.handlers.InteractHandlers;
 import dev.mcpfabric.client.handlers.InventoryHandlers;
 import dev.mcpfabric.client.handlers.LocalPlayerHandlers;
@@ -30,6 +31,7 @@ public class McpFabricClient implements ClientModInitializer {
 		InteractHandlers.register(router);
 		InventoryHandlers.register(router);
 		VisionHandlers.register(router);
+		GuiHandlers.register(router);
 		NavHandlers.register(router);
 		ClientChatHandlers.register(router); // client variant of chat.send (speaks as local player)
 		ClientEvents.register(McpFabric.events());

@@ -18,16 +18,26 @@ de gameplay sur le staging, avec à terme des scénarios automatisés.
 
 ## Roadmap des extensions
 
-Côté mod client (manques identifiés le 2026-09-17) :
+Fait (branche `lato/dev`) :
 
-- `gui.list` : arbre des widgets (type, texte, position, état) ;
-- `gui.click` / `gui.type` / `gui.key` / `gui.close` : interaction GUI robuste
-  (remplace le pilotage souris/clavier Windows, fragile) ;
-- `container.read` / `container.move` : lecture et déplacement d'items
-  slot→slot (coffres, shops QuickShop, inventaires) ;
+- `gui.list` : arbre des widgets (type, texte, position, taille, état, valeur des
+  champs texte) ;
+- `gui.click` : clic par index, par texte ou par coordonnées ;
+- `gui.type` : saisie de texte (+ `clear`, `enter`) ;
+- `gui.key` : touche nommée ou code GLFW ;
+- `gui.close` ;
+- `container.read` / `container.click` : lecture des slots non vides et clic
+  slot (pickup, quick_move, throw, swap, bouton gauche/droit).
+- Compatibilité : API d'événements GUI par records à partir de 1.21.9
+  (`MouseButtonEvent`, `CharacterEvent`, `KeyEvent`) ; accès à l'écran courant
+  via `mc.gui.screen()` à partir de 26.2.
+
+Reste à faire :
+
 - `hud.read` : sidebar, bossbar, actionbar, titres ;
 - `chat.subscribe` : flux chat au lieu du polling ;
-- `events` étendus : ouverture/fermeture d'écran, pickup, level up, mort.
+- `events` étendus : ouverture/fermeture d'écran, pickup, level up, mort ;
+- `container.move` : déplacement slot→slot en une commande.
 
 Côté serveur (plugin Paper `LatoTest`, à créer) :
 

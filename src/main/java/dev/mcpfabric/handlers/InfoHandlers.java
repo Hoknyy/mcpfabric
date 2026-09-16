@@ -51,6 +51,8 @@ public final class InfoHandlers {
 			groups.addProperty("control", client && McpFabric.config().enablePlayerControl);
 			groups.addProperty("interact", client && McpFabric.config().enablePlayerControl);
 			groups.addProperty("inventory", client);
+			groups.addProperty("gui", client);
+			groups.addProperty("container", client);
 			groups.addProperty("chat", true);
 			groups.addProperty("vision", client && McpFabric.config().enableVision);
 			groups.addProperty("navigation", client && McpFabric.config().enablePlayerControl);
@@ -77,6 +79,8 @@ public final class InfoHandlers {
 		if (client) {
 			a.add("player_local");
 			a.add("inventory");
+			a.add("gui");
+			a.add("container");
 			if (McpFabric.config().enablePlayerControl) {
 				a.add("control");
 				a.add("interact");
