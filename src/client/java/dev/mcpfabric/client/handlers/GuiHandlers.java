@@ -14,10 +14,13 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemLore;
 import org.lwjgl.glfw.GLFW;
 //? if >=1.21.9 {
 /*import net.minecraft.client.input.CharacterEvent;*/
@@ -260,6 +263,12 @@ public final class GuiHandlers {
 			j.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
 			j.addProperty("count", stack.getCount());
 			j.addProperty("name", stack.getHoverName().getString());
+			ItemLore lore = stack.get(DataComponents.LORE);
+			if (lore != null && !lore.lines().isEmpty()) {
+				JsonArray lines = new JsonArray();
+				for (Component line : lore.lines()) lines.add(line.getString());
+				j.add("lore", lines);
+			}
 			items.add(j);
 		}
 		o.add("items", items);
