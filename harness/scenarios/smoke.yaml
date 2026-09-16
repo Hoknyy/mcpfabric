@@ -1,0 +1,23 @@
+name: smoke
+description: Vérifie que le bridge répond et que le client est dans un monde.
+steps:
+  - call: info.status
+    expect:
+      mod: mcpfabric
+      side: client
+
+  - call: player.getState
+    expect:
+      gte:
+        health: 1
+
+  - log: "Chat récent (contexte)"
+    call: chat.getRecent
+    args:
+      limit: 5
+
+  - call: vision.describeScene
+    args:
+      maxDistance: 16
+      rayColumns: 5
+      rayRows: 3

@@ -1,0 +1,13 @@
+{
+  "name": "mcpfabric-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scenario runner for the MCPFabric bridge: drive the Minecraft client and assert on the results.",
+  "scripts": {
+    "run": "node runner.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.5.0"
+  }
+}

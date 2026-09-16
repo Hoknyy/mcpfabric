@@ -1,0 +1,63 @@
+name: shop-buy-wheat
+description: >
+  Parcours d'achat dans le shop EconomyShopGUI du serveur : Menu -> Shop -> Farming -> Wheat ->
+  Click to purchase. Nécessite un compte crédité, sinon l'étape finale échoue avec le message
+  "You do not have enough money." (ce qui est déjà une assertion valide du funnel).
+steps:
+  - call: gui.close
+    optional: true
+
+  - call: chat.send
+    args:
+      message: "/menu"
+
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Asteria Online - Menu"
+      itemAt:
+        10:
+          name: Shop
+
+  - call: container.click
+    args:
+      slot: 10
+
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Server Shop"
+      itemAt:
+        10:
+          name: Farming
+
+  - call: container.click
+    args:
+      slot: 10
+
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Asteria Shop - Farming"
+      itemAt:
+        0:
+          name: Wheat
+
+  - call: container.click
+    args:
+      slot: 0
+
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Buying > Wheat"
+
+  - call: container.click
+    args:
+      slot: 13
+    screenshot: true
+
+  - expect_chat: "You bought"
+    timeout: 6
+
+  - call: gui.close
