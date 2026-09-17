@@ -46,11 +46,18 @@ Côté serveur (plugin Paper `LatoTest`, à créer) :
 - `economy.get/set`, `shop.list` (prix via Vault / QuickShop / EconomyShopGUI) ;
 - `player.reset/give`, `world.snapshot/restore` pour des fixtures répétables.
 
-Côté harnais (hors Minecraft) :
+Côté harnais (hors Minecraft) — fait dans `harness/` :
 
-- scénarios YAML/JSON exécutés via MCP, avec assertions et rapport
-  (pass/fail, durées, screenshots par étape) ;
-- exécution sur le staging à chaque changement des plugins `Lato*`.
+- scénarios YAML exécutés via le bridge, avec assertions, retry, screenshots d'échec
+  et rapport (pass/fail, durées) ;
+- fixtures serveur par console Pterodactyl (`panel_cmd.py` consomme le transport
+  d'AA-Main), étape `console` dans les scénarios ;
+- `node runner.mjs --doctor` pour valider l'environnement avant de tester.
+
+Reste à faire côté harnais :
+
+- exécution sur le staging à chaque changement des plugins `Lato*` (déclenchement) ;
+- assertions de solde par API plutôt que par lore quand un plugin LATO le permettra.
 
 ## Build
 

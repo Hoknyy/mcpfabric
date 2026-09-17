@@ -1,9 +1,14 @@
 name: shop-buy-wheat
 description: >
-  Parcours d'achat dans le shop EconomyShopGUI du serveur : Menu -> Shop -> Farming -> Wheat ->
-  Click to purchase. Nécessite un compte crédité, sinon l'étape finale échoue avec le message
-  "You do not have enough money." (ce qui est déjà une assertion valide du funnel).
+  Fixture (solde remis à 100$ via la console Pterodactyl) puis funnel d'achat EconomyShopGUI
+  complet : Menu -> Shop -> Farming -> Wheat -> achat. Vérifie le message d'achat et le solde
+  après achat (via la lore de la tête joueur du shop).
 steps:
+  - console:
+      server: survival
+      command: "eco set {{player}} 100"
+  - wait: 1
+
   - call: gui.close
     optional: true
 
@@ -30,6 +35,8 @@ steps:
       itemAt:
         10:
           name: Farming
+      loreContains:
+        45: "Balance: $100.00"
 
   - call: container.click
     args:
@@ -51,6 +58,8 @@ steps:
     retry: 5
     expect:
       title: "Buying > Wheat"
+      loreContains:
+        13: "$8.00"
 
   - call: container.click
     args:
@@ -59,5 +68,27 @@ steps:
 
   - expect_chat: "successfully bought"
     timeout: 6
+
+  - call: gui.close
+
+  - call: chat.send
+    args:
+      message: "/menu"
+
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Asteria Online - Menu"
+
+  - call: container.click
+    args:
+      slot: 10
+
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Server Shop"
+      loreContains:
+        45: "Balance: $92.00"
 
   - call: gui.close
