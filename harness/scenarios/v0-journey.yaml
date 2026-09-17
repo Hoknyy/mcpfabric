@@ -1,0 +1,121 @@
+name: v0-journey
+# Parcours joueur v0 (compte non-OP) :
+#   fixtures -> /spawn -> /menu -> shop + solde -> vente -> solde -> /rtp ->
+#   /claim -> /sethome -> /spawn -> /home.
+# Assertions basées sur l'état (GUI, dimension, position), pas sur le chat :
+# le buffer de chat n'est pas purgé entre les runs.
+# Contraintes :
+# - /rtp a un cooldown de 600 s : attendre 10 min entre deux runs ;
+# - ne jamais utiliser de tp console vers des chunks non générés (EssentialsX
+#   charge le chunk en synchrone et peut figer le serveur ; incident du
+#   2026-09-17). Les déplacements passent par /spawn, /rtp et /home.
+vars:
+  player: Tikifirst
+steps:
+  # ---------------------------------------------------------------- fixtures
+  - log: "Fixtures : inventaire vide, solde 100, 16 charbons"
+  - console: { server: survival, command: "clear {{player}}" }
+  - console: { server: survival, command: "eco set {{player}} 100" }
+  - console: { server: survival, command: "give {{player}} minecraft:coal 16" }
+  - wait: 2
+
+  # --------------------------------------------- 1. /spawn : position design
+  - log: "1. /spawn : arrivée au spawn design"
+  - call: gui.close
+    optional: true
+  - call: chat.send
+    args: { message: "/spawn" }
+  - call: player.getState
+    retry: { timeout: 25, interval: 2 }
+    expect:
+      dimension: "minecraft:spawn"
+      gte: { x: -2, y: -31, z: -183 }
+      lte: { x: 3, y: -27, z: -178 }
+
+  # -------------------------------------------------------- 2. menu principal
+  - log: "2. /menu : structure du menu"
+  - call: chat.send
+    args: { message: "/menu" }
+  - call: container.read
+    retry: 8
+    expect:
+      title: "Asteria Online - Menu"
+      itemAt:
+        10: { name: Shop }
+        11: { name: "Random Teleport" }
+        12: { name: Claims }
+        13: { name: Jobs }
+        14: { name: Quests }
+        15: { name: "Auction House" }
+        16: { name: "Player Warps" }
+        22: { name: Close }
+
+  # ------------------------------------------------- 3. shop + solde initial
+  - log: "3. Shop : solde initial affiché"
+  - call: container.click
+    args: { slot: 10 }
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Server Shop"
+      loreContains:
+        45: "Balance: $100.00"
+  - call: gui.close
+
+  # ---------------------------------------------------------------- 4. vente
+  - log: "4. /sellall : vente des 16 charbons"
+  - call: chat.send
+    args: { message: "/sellall" }
+  - wait: 1
+  - call: chat.send
+    args: { message: "/menu" }
+  - call: container.read
+    retry: 5
+    expect: { title: "Asteria Online - Menu" }
+  - call: container.click
+    args: { slot: 10 }
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Server Shop"
+      loreContains:
+        45: "Balance: $148.00"
+  - call: gui.close
+
+  # ------------------------------------------- 5. rtp : Spawn -> monde world
+  - log: "5. /rtp : téléportation du monde Spawn vers world"
+  - call: chat.send
+    args: { message: "/rtp" }
+  - call: player.getState
+    retry: { timeout: 30, interval: 2 }
+    expect: { dimension: "minecraft:overworld" }
+
+  # ------------------------------------------------------ 6. claim + sethome
+  - log: "6. /claim + /sethome dans la nature"
+  - console: { server: survival, command: "adjustbonusclaimblocks {{player}} 1000" }
+  - wait: 1
+  - call: chat.send
+    args: { message: "/claim" }
+  - wait: 1
+  - call: chat.send
+    args: { message: "/sethome" }
+  - wait: 1
+
+  # ------------------------------------------------- 7. /spawn : retour design
+  - log: "7. /spawn : retour au spawn design"
+  - call: chat.send
+    args: { message: "/spawn" }
+  - call: player.getState
+    retry: { timeout: 25, interval: 2 }
+    expect:
+      dimension: "minecraft:spawn"
+      gte: { x: -2, y: -31, z: -183 }
+      lte: { x: 3, y: -27, z: -178 }
+
+  # ---------------------------------------------------- 8. /home : retour claim
+  - log: "8. /home : retour au claim"
+  - call: chat.send
+    args: { message: "/home" }
+  - call: player.getState
+    retry: { timeout: 25, interval: 2 }
+    expect: { dimension: "minecraft:overworld" }
