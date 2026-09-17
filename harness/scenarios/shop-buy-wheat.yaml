@@ -57,7 +57,7 @@ steps:
       slot: 13
     screenshot: true
 
-  - expect_chat: "You bought"
+  - expect_chat: "successfully bought"
     timeout: 6
 
   - call: gui.close
