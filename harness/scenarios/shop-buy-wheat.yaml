@@ -1,9 +1,15 @@
 name: shop-buy-wheat
+destructive: true
 description: >
   Fixture (solde remis à 100$ via la console Pterodactyl) puis funnel d'achat EconomyShopGUI
   complet : Menu -> Shop -> Farming -> Wheat -> achat. Vérifie le message d'achat et le solde
   après achat (via la lore de la tête joueur du shop).
 steps:
+  - console: { server: survival, command: "clear {{player}}" }
+  - call: player.getInventory
+    retry: 3
+    expect: { hotbar: [], main: [] }
+    save: beforeInventory
   - console:
       server: survival
       command: "eco set {{player}} 100"
@@ -69,6 +75,11 @@ steps:
   - expect_chat: "successfully bought"
     timeout: 6
 
+  - call: player.getInventory
+    retry: 3
+    expect:
+      inventoryDelta: { baseline: "{{beforeInventory}}", id: "minecraft:wheat", delta: 1 }
+
   - call: gui.close
 
   - call: chat.send
@@ -91,4 +102,26 @@ steps:
       loreContains:
         45: "Balance: $92.00"
 
+  - call: gui.close
+
+teardown:
+  - call: gui.close
+    optional: true
+  - console: { server: survival, command: "clear {{player}}" }
+  - console: { server: survival, command: "eco set {{player}} 0" }
+  - call: player.getInventory
+    retry: 3
+    expect: { hotbar: [], main: [] }
+  - call: chat.send
+    args: { message: "/menu" }
+  - call: container.read
+    retry: 5
+    expect: { title: "Asteria Online - Menu" }
+  - call: container.click
+    args: { slot: 10, expectedItemName: Shop }
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Server Shop"
+      loreContains: { 45: "Balance: $0.00" }
   - call: gui.close

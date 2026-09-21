@@ -1,23 +1,24 @@
 name: v0-journey
+destructive: true
 # Parcours joueur v0 (compte non-OP) :
 #   fixtures -> /spawn -> /menu -> shop + solde -> vente -> solde -> /rtp ->
 #   /claim -> /sethome -> /spawn -> /home.
-# Assertions basées sur l'état (GUI, dimension, position), pas sur le chat :
-# le buffer de chat n'est pas purgé entre les runs.
+# Assertions de position/inventaire et messages système nouveaux après chaque action.
+# Réservé à un UUID de compte jetable explicitement configuré.
 # Contraintes :
 # - /rtp a un cooldown de 600 s : attendre 10 min entre deux runs ;
 # - ne jamais utiliser de tp console vers des chunks non générés (EssentialsX
 #   charge le chunk en synchrone et peut figer le serveur ; incident du
 #   2026-09-17). Les déplacements passent par /spawn, /rtp et /home.
-vars:
-  player: Tikifirst
 steps:
   # ---------------------------------------------------------------- fixtures
   - log: "Fixtures : inventaire vide, solde 100, 16 charbons"
   - console: { server: survival, command: "clear {{player}}" }
   - console: { server: survival, command: "eco set {{player}} 100" }
   - console: { server: survival, command: "give {{player}} minecraft:coal 16" }
-  - wait: 2
+  - call: player.getInventory
+    retry: 4
+    expect: { inventoryCount: { "minecraft:coal": 16 } }
 
   # --------------------------------------------- 1. /spawn : position design
   - log: "1. /spawn : arrivée au spawn design"
@@ -66,7 +67,9 @@ steps:
   - log: "4. /sellall : vente des 16 charbons"
   - call: chat.send
     args: { message: "/sellall" }
-  - wait: 1
+  - call: player.getInventory
+    retry: 4
+    expect: { inventoryCount: { "minecraft:coal": 0 } }
   - call: chat.send
     args: { message: "/menu" }
   - call: container.read
@@ -92,14 +95,19 @@ steps:
 
   # ------------------------------------------------------ 6. claim + sethome
   - log: "6. /claim + /sethome dans la nature"
-  - console: { server: survival, command: "adjustbonusclaimblocks {{player}} 1000" }
-  - wait: 1
+  - call: player.getState
+    save: claimPosition
+    expect: { dimension: "minecraft:overworld" }
   - call: chat.send
     args: { message: "/claim" }
-  - wait: 1
+  - expect_chat: "Claim created!"
+    save: claimCreated
+    timeout: 5
   - call: chat.send
-    args: { message: "/sethome" }
-  - wait: 1
+    args: { message: "/sethome mcp_{{runId}}" }
+  - expect_chat: "Successfully set a new home called mcp_{{runId}}"
+    save: homeCreated
+    timeout: 5
 
   # ------------------------------------------------- 7. /spawn : retour design
   - log: "7. /spawn : retour au spawn design"
@@ -115,7 +123,50 @@ steps:
   # ---------------------------------------------------- 8. /home : retour claim
   - log: "8. /home : retour au claim"
   - call: chat.send
-    args: { message: "/home" }
+    args: { message: "/home mcp_{{runId}}" }
   - call: player.getState
     retry: { timeout: 25, interval: 2 }
-    expect: { dimension: "minecraft:overworld" }
+    expect:
+      nearPosition: { baseline: "{{claimPosition}}", tolerance: 2 }
+
+teardown:
+  - call: gui.close
+    optional: true
+  - call: chat.send
+    when: homeCreated
+    args: { message: "/home mcp_{{runId}}" }
+  - call: player.getState
+    when: claimCreated
+    retry: { timeout: 25, interval: 1 }
+    expect:
+      nearPosition: { baseline: "{{claimPosition}}", tolerance: 2 }
+  - call: chat.send
+    when: claimCreated
+    args: { message: "/abandonclaim" }
+  - expect_chat: "abandoned. You now have"
+    when: claimCreated
+    timeout: 5
+  - call: chat.send
+    when: homeCreated
+    args: { message: "/delhome mcp_{{runId}}" }
+  - expect_chat: "Successfully deleted your home, mcp_{{runId}}"
+    when: homeCreated
+    timeout: 5
+  - console: { server: survival, command: "clear {{player}}" }
+  - console: { server: survival, command: "eco set {{player}} 0" }
+  - call: player.getInventory
+    retry: 3
+    expect: { hotbar: [], main: [] }
+  - call: chat.send
+    args: { message: "/menu" }
+  - call: container.read
+    retry: 5
+    expect: { title: "Asteria Online - Menu" }
+  - call: container.click
+    args: { slot: 10, expectedItemName: Shop }
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Server Shop"
+      loreContains: { 45: "Balance: $0.00" }
+  - call: gui.close

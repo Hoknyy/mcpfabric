@@ -3,11 +3,13 @@
   "url": "http://127.0.0.1:25599",
   "minecraftConfig": "C:/Users/antho/AppData/Roaming/ModrinthApp/profiles/Fabric 26.2/config/mcpfabric.config.json",
   "player": "Tikifirst",
-  "python": "C:/.agents/Minecraft/AA-Main/infra/python-runtime.cmd",
-  "aaMainInfra": "C:/.agents/Minecraft/AA-Main/infra",
+  "python": "C:/Users/antho/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe",
   "servers": {
     "proxy": "61102004-183a-4da8-9a4a-a24ee6051899",
     "lobby": "d217c6ea-995d-4575-99b6-981c14cb0838",
     "survival": "f683e3a3-a700-4f10-a1cf-91d29bacdd48"
-  }
+  },
+  "sources": "../../../config/sources.json",
+  "serverAddress": "51.75.24.137:25565",
+  "disposablePlayerUuids": []
 }

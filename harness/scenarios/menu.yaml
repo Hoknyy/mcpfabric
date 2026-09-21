@@ -1,0 +1,23 @@
+name: menu
+description: Navigation du menu et lecture du shop, sans achat ni remise à zéro du compte.
+steps:
+  - call: gui.close
+    optional: true
+  - call: chat.send
+    args: { message: "/menu" }
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Asteria Online - Menu"
+      itemAt: { 10: { name: Shop } }
+  - call: container.click
+    args: { slot: 10, expectedItemName: Shop }
+  - call: container.read
+    retry: 5
+    expect:
+      title: "Server Shop"
+      itemAt: { 10: { name: Farming } }
+    screenshot: true
+teardown:
+  - call: gui.close
+    optional: true

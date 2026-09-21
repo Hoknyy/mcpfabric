@@ -1,94 +1,105 @@
-# Harnais de test MCPFabric
+# Harnais de test MCPFabric — protocole 2
 
-Runner de scénarios pour piloter le client Minecraft via le bridge du mod, préparer l'état
-du serveur (fixtures par console Pterodactyl) et vérifier le résultat par des assertions —
-sans toucher au clavier/souris.
+Le runner pilote le client authentifié par le launcher. Un run contrôle une seule session
+Minecraft. Les actions restent soumises aux permissions du joueur sur le serveur.
 
-## Prérequis
+## Préparation
 
-- Minecraft ouvert sur le profil Modrinth `Fabric 26.2` (mod `mcpfabric` chargé, bridge sur
-  `127.0.0.1:25599`). C'est la seule action manuelle restante : si le bridge ne répond pas,
-  demander à l'utilisateur d'ouvrir le jeu.
-- Le token est résolu automatiquement depuis `config/mcpfabric.config.json` du profil
-  (chemin dans `config.json`), ou via `--token` / `MCPFABRIC_TOKEN`.
-- Console Pterodactyl : `config.json` pointe le runtime Python d'AA-Main ; `panel_cmd.py`
-  consomme `panel_transport.py` d'AA-Main (clé API lue à l'exécution dans le secret AA-Main).
+1. Construire le MCP : `cd mcp-server`, `npm ci`, `npm run build`.
+2. Installer le JAR Lato `0.2.2-lato.1+26.2` dans le profil Fabric 26.2, puis redémarrer Minecraft.
+3. Depuis `harness`, `npm ci`, puis `node runner.mjs --doctor` une fois connecté au staging.
 
-## Vérifier l'environnement
+Le doctor compare l'identité réellement renvoyée par le mod et l'adresse du serveur avec
+`config.json`. Un HTTP 204 de Pterodactyl signifie « requête acceptée », pas « fixture vérifiée ».
 
-```bash
-node runner.mjs --doctor
+```powershell
+node runner.mjs scenarios/smoke.yaml
+node runner.mjs scenarios/menu.yaml
+npm test
 ```
 
-Contrôle : bridge joignable, joueur dans un monde, token résolu, console Pterodactyl.
+`menu.yaml` ouvre le menu et le shop sans achat. Les scénarios `shop-buy-wheat.yaml` et
+`v0-journey.yaml` sont destructifs : leur exécution exige que l'UUID réel soit dans
+`config.disposablePlayerUuids`. Cette liste est volontairement vide. Ne pas y inscrire un
+compte personnel à conserver : ces scénarios normalisent son inventaire et son solde,
+et ne restaurent pas un état personnel antérieur. Aucun contournement CLI n'est fourni.
 
-## Lancer un scénario
+Le parcours claim/home exige des claim blocks déjà disponibles sur le compte jetable.
+Il ne distribue plus 1 000 blocs à chaque run. Il utilise un home `mcp_<runId>`, vérifie
+les messages système nouveaux et le retour à la position enregistrée, puis abandonne
+le claim créé et supprime ce home. Le cooldown RTP réel reste de 600 s : ce parcours
+n'est pas le smoke test à lancer après chaque édition. Une erreur de nettoyage rend
+le run FAIL ; consulter le rapport avant de relancer. Si une création a eu lieu mais que
+sa confirmation est perdue, le runner ne supprime pas un claim supposé : inspecter le
+compte jetable et réconcilier cet état avant le prochain run. Les assertions de chat GriefPrevention
+3D et HuskHomes sont alignées sur les messages du staging lus le 18 septembre 2026 ; elles ne
+constituent pas un test de protection contre un deuxième joueur.
 
-```bash
-node runner.mjs scenarios/shop-buy-wheat.yaml
-```
-
-Options : `--url`, `--token`, `--var player=Nom`, `--artifacts <dir>`.
-En cas d'échec, un screenshot est écrit dans `artifacts/<scenario>/`.
-
-## Format d'un scénario
+## Contrat des scénarios
 
 ```yaml
-name: shop-buy-wheat
-vars:
-  player: Tikifirst
+name: menu
 steps:
-  - console: { server: survival, command: "eco set {{player}} 100" }   # fixture
-  - wait: 1
   - call: chat.send
     args: { message: "/menu" }
   - call: container.read
-    retry: 5
+    retry: { timeout: 5, interval: 0.2 }
     expect:
       title: "Asteria Online - Menu"
       itemAt: { 10: { name: Shop } }
-      loreContains: { 45: "Balance: $100.00" }
   - call: container.click
-    args: { slot: 10 }
+    args: { slot: 10, expectedItemName: Shop }
+  - call: container.read
+    retry: 5
+    expect: { title: "Server Shop" }
+teardown:
+  - call: gui.close
     optional: true
-  - expect_chat: "successfully bought"
-    timeout: 6
 ```
 
-Étapes disponibles :
+- `call` / `args` : appel du bridge. Le MCP et le runner acquièrent automatiquement un
+  contrôle exclusif renouvelable. Un deuxième agent reçoit `control_busy`.
+- `retry` : réservé aux lectures. Une action est envoyée une seule fois. Après timeout
+  de transport ou `action_uncertain`, inspecter le résultat avant toute nouvelle action.
+- `expect_chat` : seulement les messages système apparus après la dernière action du
+  runner. Le curseur est capturé avant l'action ; un redémarrage/perte d'historique fait
+  échouer la preuve. Pour du chat de joueurs, utiliser explicitement une lecture d'événements.
+- `save` : sauvegarde le résultat. `{{nom.champ}}` accède à un champ ; une expression qui
+  occupe toute la valeur conserve le type (objet/nombre). Une variable inconnue fait échouer.
+- `console: {server, command}` : fixture exécutée par le transport canonique AA-Main,
+  sur compte jetable uniquement. Ajouter ensuite une assertion de l'état réellement obtenu.
+- `teardown` : exécuté même après échec. `when: nomSauvegarde` conditionne un nettoyage
+  à une étape effectivement réussie. Une étape de cleanup qui échoue bloque ses étapes
+  suivantes pour éviter d'agir à partir d'une précondition fausse.
+- `optional: true` : uniquement pour `gui.close` lorsqu'aucun écran n'est ouvert.
+- `wait` : pause bornée ; préférer une lecture avec assertion et retry.
+- `continueOnError` : poursuit les étapes, mais conserve le statut FAIL.
 
-- `call` + `args` — appel bridge (`gui.*`, `container.*`, `chat.*`, `player.*`, `vision.*`…) ;
-- `console` — commande console Pterodactyl (`server`: `survival` | `lobby` | `proxy`) ;
-- `wait` — pause en secondes ;
-- `expect_chat` — attend un message de chat (polling) ;
-- `log` — simple commentaire.
+Assertions : égalité sur chemin (`title`, `items.0.name`), `itemAt`, `loreContains`,
+`contains`, `gte`, `lte`, `inventoryCount`, `inventoryDelta` et `nearPosition`.
+Exemple : `nearPosition: {baseline: "{{destination}}", tolerance: 2}` compare les trois
+coordonnées ET la dimension. `inventoryDelta: {baseline: "{{avant}}", id: "minecraft:wheat",
+delta: 1}` vérifie la livraison. L'ancien `expect.chatContains` est refusé.
+Un scénario vide ou dépourvu d'assertion n'est pas un test valide.
 
-Assertions dans `expect` :
+Avant `container.click`, lire/assertir le conteneur : le runner réutilise le `menuId`,
+le `stateId` et le titre observés. Une mutation invalide ce cache. Les utilisateurs des
+outils MCP fournissent explicitement ces préconditions depuis `container_read`/`gui_list`.
 
-- `cle: valeur` — égalité stricte sur un chemin (`title`, `items.0.name`…) ;
-- `itemAt: { <slot>: { name|id|count: ... } }` — pour `container.read` ;
-- `loreContains: { <slot>: "sous-chaîne" }` — prix/soldes affichés en lore ;
-- `contains: { chemin: "sous-chaîne" }` ; `gte` / `lte: { chemin: nombre }`.
+## Rapports et configuration
 
-Modificateurs d'étape : `retry` (secondes ou `{timeout, interval}`), `optional`, `save`,
-`screenshot`, et `continueOnError` au niveau scénario. Les `{{vars}}` sont substitués
-partout (args, commandes console).
+Chaque run produit `artifacts/<scenario>/<runId>/report.json` avec cible, version du bridge,
+résultats observés, tentatives, durées, échecs et cleanup. Screenshots d'échec et captures
+demandées restent dans le même dossier. Les données de chat/inventaire sont des données
+de test locales ; ces artefacts sont ignorés par Git.
 
-## Serveurs (fixtures)
+Options : `--config`, `--url`, `--token`, `--var player=Nom`, `--artifacts`.
+Préférer le token lu à l'exécution depuis le profil ou `MCPFABRIC_TOKEN` à un argument CLI.
+`config.python` doit être l'exécutable Python (runtime partagé), pas un `.cmd` : les
+commandes console sont transmises en JSON sur stdin, sans interpolation shell.
+`config.sources` référence le registre d'AA-Lato, qui référence à son tour les ressources
+AA-Main. Aucune clé API n'est copiée dans le fork.
 
-`config.json` mappe les serveurs du réseau staging AA-Lato :
-
-| nom | rôle |
-| --- | --- |
-| `survival` | backend Paper (plugins, économie, shop) |
-| `lobby` | lobby |
-| `proxy` | Velocity |
-
-## Pièges connus
-
-- **Deux économies** : le shop (EconomyShopGUI) et `/eco` utilisent **EternalEconomy**
-  (Vault) ; `/money` répond via un autre plugin et peut afficher un autre solde. Assertir
-  le solde via la **lore de la tête joueur** du shop, pas via `/money`.
-- Le prix d'un item est dans sa **lore** (`container.read` la renvoie).
-- Les timestamps de `logs/latest.log` ne sont pas fiables pour corréler (préférer le chat
-  in-game via `chat.getRecent`).
+Le shop et `/eco` utilisent EternalEconomy via Vault ; `/money` est une autre économie.
+Vérifier les soldes du shop via sa lore. Les succès UI n'impliquent jamais une réussite
+serveur : c'est l'assertion suivante qui l'établit.
