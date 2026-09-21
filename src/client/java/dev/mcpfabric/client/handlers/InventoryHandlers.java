@@ -31,6 +31,7 @@ public final class InventoryHandlers {
 		router.register("inventory.dropSlot", ctx -> ClientMc.call(() -> {
 			LocalPlayer p = ClientMc.player();
 			MultiPlayerGameMode gm = ClientMc.gameMode();
+			if (p.containerMenu != p.inventoryMenu || !p.inventoryMenu.getCarried().isEmpty()) throw RpcException.badRequest("Close the container and empty the cursor before inventory actions.");
 			int menuSlot = toMenuSlot(ctx.getInt("slot"));
 			boolean whole = ctx.optBool("wholeStack", true);
 			containerClick(gm, p.inventoryMenu.containerId, menuSlot, whole ? 1 : 0, true, p);
@@ -40,6 +41,7 @@ public final class InventoryHandlers {
 		router.register("inventory.swapSlots", ctx -> ClientMc.call(() -> {
 			LocalPlayer p = ClientMc.player();
 			MultiPlayerGameMode gm = ClientMc.gameMode();
+			if (p.containerMenu != p.inventoryMenu || !p.inventoryMenu.getCarried().isEmpty()) throw RpcException.badRequest("Close the container and empty the cursor before inventory actions.");
 			int a = toMenuSlot(ctx.getInt("slotA"));
 			int b = toMenuSlot(ctx.getInt("slotB"));
 			int id = p.inventoryMenu.containerId;

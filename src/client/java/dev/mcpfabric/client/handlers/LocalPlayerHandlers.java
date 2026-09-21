@@ -20,6 +20,10 @@ public final class LocalPlayerHandlers {
 		router.register("player.getState", ctx -> ClientMc.call(() -> {
 			LocalPlayer p = ClientMc.player();
 			JsonObject o = new JsonObject();
+			o.addProperty("name", p.getName().getString());
+			o.addProperty("uuid", p.getUUID().toString());
+			var serverData = ClientMc.mc().getCurrentServer();
+			o.addProperty("serverAddress", serverData == null ? "integrated" : serverData.ip);
 			o.addProperty("x", p.getX());
 			o.addProperty("y", p.getY());
 			o.addProperty("z", p.getZ());

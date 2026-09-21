@@ -51,6 +51,12 @@ const playerRef = {
     .describe('Target player by name or UUID. Use "@all" where broadcasting is meaningful.'),
 };
 
+const guiGuard = {
+  expectedScreen: z.string().describe("Screen class returned by gui_list."),
+  expectedTitle: z.string().optional(),
+  expectedMenuId: z.number().int().optional().describe("Required when the current screen is a container."),
+  expectedStateId: z.number().int().optional(),
+};
 const READ = { readOnlyHint: true } as const;
 const WRITE = { destructiveHint: true } as const;
 
@@ -523,6 +529,11 @@ export const TOOLS: ToolDef[] = [
     inputSchema: { slotA: z.number().int().min(0).max(45), slotB: z.number().int().min(0).max(45) },
   },
 
+  {
+    name: "stop_all_controls", method: "control.stopAll", title: "Stop all automation",
+    description: "Emergency stop: release movement, navigation, mining, item use and the controller lease. Available even when controls are disabled.",
+    inputSchema: {},
+  },
   // ===== gui (client) ========================================================================
   {
     name: "gui_list",
@@ -539,7 +550,7 @@ export const TOOLS: ToolDef[] = [
     title: "Click a GUI widget",
     description:
       "Client-only. Click a widget of the open screen: by widget index or label text (from gui_list), or by raw screen coordinates x/y. button is left (default), right or middle.",
-    inputSchema: {
+    inputSchema: { ...guiGuard,
       index: z.number().int().min(0).optional().describe("Widget index from gui_list."),
       text: z.string().optional().describe("Case-insensitive substring of the widget label."),
       x: z.number().optional().describe("Raw screen X (together with y) instead of index/text."),
@@ -553,7 +564,7 @@ export const TOOLS: ToolDef[] = [
     title: "Type text into the open screen",
     description:
       "Client-only. Type text into the focused field of the open screen (click the field first with gui_click). Set clear=true to empty the focused field first, enter=true to press Enter afterwards.",
-    inputSchema: {
+    inputSchema: { ...guiGuard,
       text: z.string(),
       clear: z.boolean().optional().default(false),
       enter: z.boolean().optional().default(false),
@@ -565,7 +576,7 @@ export const TOOLS: ToolDef[] = [
     title: "Press a key on the open screen",
     description:
       'Client-only. Send a key press to the open screen, e.g. "escape" to close it, "enter" to confirm. Accepts a named key or a raw GLFW keyCode.',
-    inputSchema: {
+    inputSchema: { ...guiGuard,
       key: z
         .string()
         .optional()
@@ -578,7 +589,7 @@ export const TOOLS: ToolDef[] = [
     method: "gui.close",
     title: "Close the open screen",
     description: "Client-only. Close whatever screen is currently open (equivalent to pressing Escape).",
-    inputSchema: {},
+    inputSchema: { ...guiGuard,},
   },
   {
     name: "container_read",
@@ -596,6 +607,12 @@ export const TOOLS: ToolDef[] = [
     description:
       "Client-only. Click a slot of the open container: mode pickup (default), quick_move (shift-click), throw or swap. button left (default) or right. Slot numbers come from container_read.",
     inputSchema: {
+      expectedMenuId: z.number().int().describe("menuId from the last container_read."),
+      expectedStateId: z.number().int().optional(),
+      expectedTitle: z.string().optional(),
+      expectedItemId: z.string().optional(),
+      expectedItemName: z.string().optional(),
+      hotbarSlot: z.number().int().refine(n => (n >= 0 && n <= 8) || n === 40).optional().describe("Required in swap mode: hotbar 0-8 or offhand 40."),
       slot: z.number().int().min(0).describe("Menu slot index (from container_read)."),
       mode: z.enum(["pickup", "quick_move", "throw", "swap"]).optional().default("pickup"),
       button: z.enum(["left", "right"]).optional().default("left"),

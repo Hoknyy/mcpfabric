@@ -81,3 +81,39 @@ Config client MCP (opencode) :
   }
 }
 ```
+
+## Correctifs de fiabilité — 2026-09-18
+
+Version du mod/MCP : `0.2.2-lato.1`, protocole bridge **2**. Le mod et le serveur MCP
+se mettent à jour ensemble ; redémarrage du client nécessaire après remplacement du JAR.
+
+- Toutes les écritures RPC requièrent une prise de contrôle exclusive (`control.acquire`,
+  `_session` sur les écritures, `control.heartbeat`, `control.release`). Le MCP et le
+  runner la gèrent ; un client HTTP direct doit la gérer explicitement. Durée par défaut
+  10 s, configurable entre 1 et 30 s via `controlLeaseMs`.
+- `control.stopAll`, `control.stop` et `nav.stop` arrêtent les inputs, navigation, minage
+  et utilisation d'objet et révoquent la session. Les arrêts restent disponibles même
+  si le contrôle est désactivé. Expiration, changement de joueur/monde et mort relâchent
+  les inputs du bot, sans écraser chaque tick les touches physiques de l'utilisateur.
+- Les guards sont vérifiés à la réception ET sur le thread du jeu. Une tâche expirée
+  encore en file n'est pas exécutée. Une tâche déjà commencée peut répondre
+  `action_uncertain` : vérifier l'état, jamais répéter aveuglément.
+- `container.click` exige `expectedMenuId`; `expectedStateId`, titre et item peuvent
+  renforcer la précondition. `gui.*` en écriture exige `expectedScreen` et le menuId
+  lorsqu'un conteneur est ouvert. Les valeurs proviennent des outils de lecture.
+- `player.getState` expose nom, UUID et adresse distante ; `container.read` expose état
+  du menu et objet au curseur. Les événements incluent `streamId`, `oldestId`, `lastId`.
+- `enablePlayerControl` est appliqué aux écritures client, `enableVision` aux deux outils
+  de vision et `enableWorldWrite` aux écritures serveur. `enableCommands` concerne le
+  RPC administratif `command.run` ; il ne constitue pas un filtrage des commandes que
+  le joueur peut émettre depuis une GUI/chat, qui relèvent du contrôle client.
+- MCP `stdio` reste le défaut. Le mode HTTP local exige désormais un token d'appelant
+  distinct configuré avec `MCPFABRIC_HTTP_TOKEN` et contrôle Host/Origin sur chaque
+  requête. Seuls localhost/127.0.0.1 au port configuré sont acceptés ; les clients natifs
+  sans Origin restent supportés. Corps et sessions sont bornés.
+
+Tests : `npm test` dans `mcp-server`, puis `npm test` dans `harness` ;
+`gradlew.bat :26.2:build` exécute aussi `safetyTest` (assertions Java, sans dépendance JUnit).
+Le workflow Build couvre maintenant les pushes `lato/dev` et les régressions du harnais.
+HUD structuré, optimisation des screenshots et navigation avancée restent des extensions
+ultérieures ; elles ne sont pas nécessaires pour corriger les erreurs de validation.

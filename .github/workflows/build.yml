@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, lato/dev ]
   pull_request:
   workflow_dispatch:
 
@@ -61,3 +61,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - run: node --test test/*.test.mjs
+      - name: Harness dependencies and regression tests
+        working-directory: harness
+        run: |
+          npm ci
+          npm test

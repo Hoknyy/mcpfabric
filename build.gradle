@@ -154,3 +154,15 @@ modrinth {
 	// No token (e.g. a local run, or CI without the secret) -> do everything except the upload.
 	debugMode.set(modrinthToken == null || modrinthToken.isEmpty())
 }
+
+// Regression checks for the bridge contract; no Minecraft world or external account required.
+tasks.register('safetyTest', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.mcpfabric.bridge.BridgeSafetyTest'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(javaVersion) }
+}
+tasks.named('check') { dependsOn tasks.named('safetyTest') }
+
+// This project uses the executable assertion suite above, without a JUnit dependency.
+tasks.named('test') { failOnNoDiscoveredTests = false }

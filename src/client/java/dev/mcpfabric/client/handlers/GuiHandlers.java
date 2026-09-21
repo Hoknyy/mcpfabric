@@ -75,7 +75,7 @@ public final class GuiHandlers {
 		router.register("gui.key", ctx -> ClientMc.call(() -> pressKey(ctx)));
 
 		router.register("gui.close", ctx -> ClientMc.call(() -> {
-			Screen screen = screen();
+			Screen screen = checkedScreen(ctx);
 			String name = screen.getClass().getSimpleName();
 			screen.onClose();
 			return Json.ok("closed " + name);
@@ -97,6 +97,19 @@ public final class GuiHandlers {
 		return s;
 	}
 
+	private static Screen checkedScreen(RpcContext ctx) throws RpcException {
+		Screen s = screen();
+		if (ctx.method().startsWith("gui.") && !s.getClass().getName().equals(ctx.getString("expectedScreen"))) {
+			throw new RpcException("stale_screen", "The screen changed; inspect it again before acting.");
+		}
+		if (s instanceof AbstractContainerScreen<?> cs) {
+			if (ctx.getInt("expectedMenuId") != cs.getMenu().containerId) throw new RpcException("stale_menu", "The container changed; read it again.");
+			if (ctx.has("expectedStateId") && ctx.getInt("expectedStateId") != cs.getMenu().getStateId()) throw new RpcException("stale_menu", "Container contents changed; read it again.");
+		}
+		if (ctx.has("expectedTitle") && !s.getTitle().getString().equals(ctx.getString("expectedTitle"))) throw new RpcException("stale_screen", "Screen title changed.");
+		return s;
+	}
+
 	private static JsonObject listScreen() throws RpcException {
 		Screen s = screen();
 		JsonObject o = new JsonObject();
@@ -104,6 +117,7 @@ public final class GuiHandlers {
 		o.addProperty("title", s.getTitle().getString());
 		if (s instanceof AbstractContainerScreen<?> cs) {
 			o.addProperty("menuId", cs.getMenu().containerId);
+			o.addProperty("stateId", cs.getMenu().getStateId());
 			o.addProperty("slotCount", cs.getMenu().slots.size());
 		}
 
@@ -131,7 +145,7 @@ public final class GuiHandlers {
 	}
 
 	private static JsonObject clickWidget(RpcContext ctx) throws RpcException {
-		Screen s = screen();
+		Screen s = checkedScreen(ctx);
 		double mx;
 		double my;
 		if (ctx.has("x") && ctx.has("y")) {
@@ -139,12 +153,13 @@ public final class GuiHandlers {
 			my = ctx.getDouble("y");
 		} else {
 			AbstractWidget target = findWidget(s, ctx.optInt("index", -1), ctx.optString("text", null));
+			if (!target.isActive() || !target.visible) throw RpcException.badRequest("Widget is disabled or hidden.");
 			mx = target.getX() + target.getWidth() / 2.0;
 			my = target.getY() + target.getHeight() / 2.0;
 		}
 		String button = ctx.optString("button", "left");
 		int btn = button.equalsIgnoreCase("right") ? 1 : button.equalsIgnoreCase("middle") ? 2 : 0;
-		dispatchClick(s, mx, my, btn);
+		if (!dispatchClick(s, mx, my, btn)) throw RpcException.badRequest("Screen did not handle this click.");
 
 		JsonObject o = new JsonObject();
 		o.addProperty("clicked", true);
@@ -178,7 +193,7 @@ public final class GuiHandlers {
 	}
 
 	private static JsonObject typeText(RpcContext ctx) throws RpcException {
-		Screen s = screen();
+		Screen s = checkedScreen(ctx);
 		String text = ctx.getString("text");
 		if (ctx.optBool("clear", false)) {
 			for (GuiEventListener child : s.children()) {
@@ -204,7 +219,7 @@ public final class GuiHandlers {
 	}
 
 	private static JsonObject pressKey(RpcContext ctx) throws RpcException {
-		Screen s = screen();
+		Screen s = checkedScreen(ctx);
 		int code;
 		if (ctx.has("keyCode")) {
 			code = ctx.getInt("keyCode");
@@ -229,12 +244,13 @@ public final class GuiHandlers {
 	 * Click/release on a screen. The GUI event API switched to record event objects
 	 * ({@code MouseButtonEvent}, {@code CharacterEvent}, {@code KeyEvent}) in 1.21.9.
 	 */
-	private static void dispatchClick(Screen s, double mx, double my, int btn) {
+	private static boolean dispatchClick(Screen s, double mx, double my, int btn) {
 		//? if <1.21.9 {
-		s.mouseClicked(mx, my, btn);
+		boolean handled = s.mouseClicked(mx, my, btn);
 		s.mouseReleased(mx, my, btn);
+		return handled;
 		//?} else
-		/*s.mouseClicked(new MouseButtonEvent(mx, my, new MouseButtonInfo(btn, 0)), false); s.mouseReleased(new MouseButtonEvent(mx, my, new MouseButtonInfo(btn, 0)));*/
+		/*boolean handled = s.mouseClicked(new MouseButtonEvent(mx, my, new MouseButtonInfo(btn, 0)), false); s.mouseReleased(new MouseButtonEvent(mx, my, new MouseButtonInfo(btn, 0))); return handled;*/
 	}
 
 	// ----- containers --------------------------------------------------------------------------
@@ -245,10 +261,15 @@ public final class GuiHandlers {
 			throw RpcException.badRequest("No container screen is open.");
 		}
 		AbstractContainerMenu menu = cs.getMenu();
-		int playerStart = Math.max(0, menu.slots.size() - 36);
+		int playerStart = menu.slots.stream().filter(slot -> slot.container == ClientMc.mc().player.getInventory()).mapToInt(slot -> slot.index).min().orElse(-1);
 
 		JsonObject o = new JsonObject();
 		o.addProperty("menuId", menu.containerId);
+		o.addProperty("stateId", menu.getStateId());
+		JsonObject carried = new JsonObject();
+		carried.addProperty("id", BuiltInRegistries.ITEM.getKey(menu.getCarried().getItem()).toString());
+		carried.addProperty("count", menu.getCarried().getCount());
+		o.add("carried", carried);
 		o.addProperty("title", s.getTitle().getString());
 		o.addProperty("slotCount", menu.slots.size());
 		o.addProperty("playerInventoryStart", playerStart);
@@ -259,7 +280,7 @@ public final class GuiHandlers {
 			if (stack.isEmpty()) continue;
 			JsonObject j = new JsonObject();
 			j.addProperty("slot", slot.index);
-			j.addProperty("playerSlot", slot.index >= playerStart);
+			j.addProperty("playerSlot", slot.container == ClientMc.mc().player.getInventory());
 			j.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
 			j.addProperty("count", stack.getCount());
 			j.addProperty("name", stack.getHoverName().getString());
@@ -278,13 +299,24 @@ public final class GuiHandlers {
 	private static JsonObject clickContainerSlot(RpcContext ctx) throws RpcException {
 		LocalPlayer p = ClientMc.player();
 		MultiPlayerGameMode gm = ClientMc.gameMode();
-		Screen s = screen();
+		Screen s = checkedScreen(ctx);
 		if (!(s instanceof AbstractContainerScreen<?> cs)) {
 			throw RpcException.badRequest("No container screen is open.");
 		}
 		int slot = ctx.getInt("slot");
-		int button = ctx.optString("button", "left").equalsIgnoreCase("right") ? 1 : 0;
+		String buttonName = ctx.optString("button", "left");
+		if (!buttonName.equals("left") && !buttonName.equals("right")) throw RpcException.badRequest("button must be left or right.");
+		int button = buttonName.equals("right") ? 1 : 0;
 		String mode = ctx.optString("mode", "pickup");
+		if (!java.util.Set.of("pickup", "quick_move", "throw", "swap").contains(mode)) throw RpcException.badRequest("Unknown container mode.");
+		if (slot < 0 || slot >= cs.getMenu().slots.size()) throw RpcException.badRequest("Slot outside the current menu.");
+		if (mode.equals("swap")) {
+			button = ctx.getInt("hotbarSlot");
+			if ((button < 0 || button > 8) && button != 40) throw RpcException.badRequest("hotbarSlot must be 0-8 or 40 (offhand).");
+		}
+		ItemStack current = cs.getMenu().getSlot(slot).getItem();
+		if (ctx.has("expectedItemId") && !BuiltInRegistries.ITEM.getKey(current.getItem()).toString().equals(ctx.getString("expectedItemId"))) throw new RpcException("stale_item", "Slot item changed.");
+		if (ctx.has("expectedItemName") && !current.getHoverName().getString().equals(ctx.getString("expectedItemName"))) throw new RpcException("stale_item", "Slot item name changed.");
 		containerInput(gm, cs.getMenu().containerId, slot, button, mode, p);
 
 		JsonObject o = new JsonObject();

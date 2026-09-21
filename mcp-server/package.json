@@ -1,6 +1,6 @@
 {
   "name": "mcpfabric-mcp-server",
-  "version": "0.2.0",
+  "version": "0.2.2-lato.1",
   "description": "MCP server that bridges AI agents to the mcpfabric Minecraft mod, exposing full read & control of the game as MCP tools.",
   "type": "module",
   "bin": {
@@ -14,7 +14,8 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
-    "dev": "node --experimental-strip-types --watch src/index.ts"
+    "dev": "node --experimental-strip-types --watch src/index.ts",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

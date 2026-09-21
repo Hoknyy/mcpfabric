@@ -33,17 +33,20 @@ public final class RpcContext {
 
 	public String getString(String key) throws RpcException {
 		require(key);
+		if (!params.get(key).isJsonPrimitive() || !params.get(key).getAsJsonPrimitive().isString()) throw new IllegalArgumentException(key + " must be a string.");
 		return params.get(key).getAsString();
 	}
 
 	public int getInt(String key) throws RpcException {
 		require(key);
-		return params.get(key).getAsInt();
+		return integer(key).intValueExact();
 	}
 
 	public double getDouble(String key) throws RpcException {
 		require(key);
-		return params.get(key).getAsDouble();
+		double value = number(key).doubleValue();
+		if (!Double.isFinite(value)) throw new IllegalArgumentException(key + " must be finite.");
+		return value;
 	}
 
 	public JsonObject getObject(String key) throws RpcException {
@@ -55,27 +58,31 @@ public final class RpcContext {
 	// --- optional ----------------------------------------------------------------------------
 
 	public String optString(String key, String def) {
-		return has(key) ? params.get(key).getAsString() : def;
+		if (!has(key)) return def;
+		if (!params.get(key).isJsonPrimitive() || !params.get(key).getAsJsonPrimitive().isString()) throw new IllegalArgumentException(key + " must be a string.");
+		return params.get(key).getAsString();
 	}
 
 	public int optInt(String key, int def) {
-		return has(key) ? params.get(key).getAsInt() : def;
+		return has(key) ? integer(key).intValueExact() : def;
 	}
 
 	public long optLong(String key, long def) {
-		return has(key) ? params.get(key).getAsLong() : def;
+		return has(key) ? integer(key).longValueExact() : def;
 	}
 
 	public double optDouble(String key, double def) {
-		return has(key) ? params.get(key).getAsDouble() : def;
+		double value = has(key) ? number(key).doubleValue() : def;
+		if (!Double.isFinite(value)) throw new IllegalArgumentException(key + " must be finite.");
+		return value;
 	}
 
 	public boolean optBool(String key, boolean def) {
-		return has(key) ? params.get(key).getAsBoolean() : def;
+		return has(key) ? bool(key) : def;
 	}
 
 	public Boolean optBoolean(String key) {
-		return has(key) ? params.get(key).getAsBoolean() : null;
+		return has(key) ? bool(key) : null;
 	}
 
 	public JsonObject optObject(String key) {
@@ -93,6 +100,15 @@ public final class RpcContext {
 		return out;
 	}
 
+	private java.math.BigDecimal number(String key) {
+		if (!params.get(key).isJsonPrimitive() || !params.get(key).getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException(key + " must be a number.");
+		return params.get(key).getAsBigDecimal();
+	}
+	private java.math.BigInteger integer(String key) { return number(key).toBigIntegerExact(); }
+	private boolean bool(String key) {
+		if (!params.get(key).isJsonPrimitive() || !params.get(key).getAsJsonPrimitive().isBoolean()) throw new IllegalArgumentException(key + " must be boolean.");
+		return params.get(key).getAsBoolean();
+	}
 	private void require(String key) throws RpcException {
 		if (!has(key)) throw RpcException.badRequest("Missing required param '" + key + "'.");
 	}

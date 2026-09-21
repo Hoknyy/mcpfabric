@@ -15,6 +15,22 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class RpcRouter {
 	private final Map<String, RpcHandler> handlers = new ConcurrentHashMap<>();
+	private final dev.mcpfabric.config.McpConfig config;
+	private final ControlLease lease = new ControlLease();
+	public RpcRouter(dev.mcpfabric.config.McpConfig config) { this.config = config; }
+	public ControlLease lease() { return lease; }
+	private int ttl() { return Math.max(1000, Math.min(30000, config.controlLeaseMs)); }
+	public void registerControl() {
+		register("control.acquire", ctx -> {
+			JsonObject o = new JsonObject();
+			o.addProperty("sessionId", lease.acquire(ttl()));
+			o.addProperty("ttlMs", ttl());
+			return o;
+		});
+		register("control.heartbeat", ctx -> { lease.heartbeat(ctx.getString("_session"), ttl()); return Json.ok("renewed"); });
+		register("control.release", ctx -> { lease.release(ctx.getString("_session")); return Json.ok("released"); });
+		register("control.status", ctx -> { JsonObject o = new JsonObject(); o.addProperty("active", lease.active()); return o; });
+	}
 
 	public void register(String method, RpcHandler handler) {
 		if (handlers.putIfAbsent(method, handler) != null) {
@@ -42,14 +58,22 @@ public final class RpcRouter {
 		if (handler == null) {
 			return Json.envelopeError("unknown_method", "No such method: " + method, null);
 		}
+		RpcContext ctx = new RpcContext(method, params == null ? new JsonObject() : params.deepCopy());
+		ThrowingSupplier<Void> previous = RpcExecution.current();
 		try {
-			JsonElement result = handler.handle(new RpcContext(method, params));
+			RpcExecution.set(() -> { RpcPolicy.check(config, lease, ctx); return null; });
+			RpcExecution.check();
+			JsonElement result = handler.handle(ctx);
 			return Json.envelopeOk(result);
 		} catch (RpcException e) {
 			return Json.envelopeError(e.code(), e.getMessage(), e.data());
+		} catch (IllegalArgumentException | ArithmeticException e) {
+			return Json.envelopeError("bad_request", e.getMessage(), null);
 		} catch (Throwable t) {
 			McpFabric.LOGGER.error("[mcpfabric] handler '{}' threw", method, t);
 			return Json.envelopeError("internal", t.getClass().getSimpleName() + ": " + t.getMessage(), null);
+		} finally {
+			RpcExecution.set(previous);
 		}
 	}
 }

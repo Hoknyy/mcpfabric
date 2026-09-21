@@ -54,10 +54,10 @@ public final class NavHandlers {
 
 		router.register("nav.status", ctx -> ClientMc.call(() -> BotController.get().statusJson()));
 
-		router.register("nav.stop", ctx -> {
-			BotController.get().stopNavigation("stopped");
-			BotController.get().stopAllMovement();
-			return Json.ok("navigation stopped");
-		});
+		router.register("nav.stop", ctx -> ClientMc.call(() -> {
+			router.lease().revoke();
+			BotController.get().stopAll(ClientMc.mc(), "stopped");
+			return Json.ok("all controls stopped; lease released");
+		}));
 	}
 }

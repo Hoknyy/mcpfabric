@@ -13,7 +13,8 @@ public final class ControlHandlers {
 	private ControlHandlers() {}
 
 	public static void register(RpcRouter router) {
-		router.register("control.setInput", ctx -> {
+		router.register("control.setInput", ctx -> ClientMc.call(() -> {
+			ClientMc.player();
 			BotController.get().setMovement(
 					ctx.optBoolean("forward"),
 					ctx.optBoolean("back"),
@@ -23,17 +24,21 @@ public final class ControlHandlers {
 					ctx.optBoolean("sneak"),
 					ctx.optBoolean("sprint"));
 			return Json.ok("input updated");
-		});
+		}));
 
-		router.register("control.stop", ctx -> {
-			BotController.get().stopAllMovement();
-			return Json.ok("stopped");
+		dev.mcpfabric.bridge.RpcHandler stop = ctx -> ClientMc.call(() -> {
+			router.lease().revoke();
+			BotController.get().stopAll(ClientMc.mc(), "stopped");
+			return Json.ok("all controls stopped; lease released");
 		});
+		router.register("control.stop", stop);
+		router.register("control.stopAll", stop);
 
-		router.register("control.jumpOnce", ctx -> {
+		router.register("control.jumpOnce", ctx -> ClientMc.call(() -> {
+			ClientMc.player();
 			BotController.get().jumpOnce();
 			return Json.ok("jump");
-		});
+		}));
 
 		router.register("control.look", ctx -> ClientMc.call(() -> {
 			LocalPlayer p = ClientMc.player();
@@ -61,13 +66,13 @@ public final class ControlHandlers {
 		}));
 
 		router.register("control.startUsing", ctx -> ClientMc.call(() -> {
-			ClientMc.mc().options.keyUse.setDown(true);
+			ClientMc.player();
+			BotController.get().startUsing(ClientMc.mc());
 			return Json.ok("using");
 		}));
 
 		router.register("control.stopUsing", ctx -> ClientMc.call(() -> {
-			ClientMc.mc().options.keyUse.setDown(false);
-			ClientMc.player().stopUsingItem();
+			BotController.get().stopUsing(ClientMc.mc());
 			return Json.ok("stopped using");
 		}));
 	}

@@ -37,6 +37,10 @@ public final class ClientMc {
 
 	/** Run a task on the render thread and wait for the result. */
 	public static <T> T call(ThrowingSupplier<T> task) throws RpcException {
-		return MainThread.call(mc(), McpFabric.config().callTimeoutMs, task);
+		return MainThread.call(mc(), McpFabric.config().callTimeoutMs, () -> {
+			BotController.get().synchronizeLifecycle(mc());
+			dev.mcpfabric.bridge.RpcExecution.check();
+			return task.get();
+		});
 	}
 }

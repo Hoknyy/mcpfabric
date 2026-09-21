@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class EventBus {
 	private static final int CAPACITY = 2000;
+	private final String streamId = java.util.UUID.randomUUID().toString();
 
 	private final SseHub sse;
 	private final AtomicLong seq = new AtomicLong();
@@ -31,8 +32,9 @@ public final class EventBus {
 	}
 
 	public GameEvent emit(String type, JsonObject data) {
-		GameEvent event = new GameEvent(seq.incrementAndGet(), type, currentTick, data);
+		GameEvent event;
 		synchronized (ring) {
+			event = new GameEvent(seq.incrementAndGet(), type, currentTick, data);
 			ring.addLast(event);
 			while (ring.size() > CAPACITY) ring.removeFirst();
 		}
@@ -44,6 +46,17 @@ public final class EventBus {
 		return event;
 	}
 
+	public JsonObject snapshot(int limit, Collection<String> typeFilter, long sinceId) throws dev.mcpfabric.bridge.RpcException {
+		if (limit < 1 || limit > CAPACITY || sinceId < 0) throw dev.mcpfabric.bridge.RpcException.badRequest("Event limit must be 1-2000 and sinceId nonnegative.");
+		synchronized (ring) {
+			JsonObject out = new JsonObject();
+			out.add("events", recent(limit, typeFilter, sinceId));
+			out.addProperty("lastId", seq.get());
+			out.addProperty("oldestId", ring.isEmpty() ? seq.get() + 1 : ring.getFirst().id());
+			out.addProperty("streamId", streamId);
+			return out;
+		}
+	}
 	public long lastId() {
 		return seq.get();
 	}

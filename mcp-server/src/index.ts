@@ -8,16 +8,15 @@
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import http from "node:http";
-import { randomUUID } from "node:crypto";
+import { createHttpServer } from "./http.js";
+import { readFileSync } from "node:fs";
 
 import { loadConfig, type ServerConfig } from "./config.js";
 import { BridgeClient, BridgeError, BridgeUnreachableError } from "./bridge.js";
 import { TOOLS, type ToolDef } from "./tools.js";
 
-const PKG_VERSION = "0.1.0";
+const PKG_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version as string;
 
 function log(...args: unknown[]): void {
   // stderr only — stdout is reserved for the stdio transport.
@@ -100,7 +99,9 @@ function buildServer(bridge: BridgeClient): McpServer {
     { name: "mcpfabric", version: PKG_VERSION },
     {
       instructions:
-        "Control and observe a running Minecraft game (Fabric 1.21.x) through the mcpfabric mod. " +
+        "Control and observe Minecraft through the Lato MCPFabric bridge protocol 2. " +
+        "Writes acquire an exclusive expiring control lease automatically. Read GUI/container first and pass its expectedScreen/menuId/stateId to actions. " +
+        "A timeout after an action starts is uncertain: inspect state before retrying. stop_all_controls releases every held input. " +
         "Call get_status first to learn which side you are on and which capability groups are available. " +
         "Client-side tools (get_self, control_*, interact_*, vision, navigation) drive the local player; " +
         "server-side tools (players_*, run_command, world write) require an integrated or dedicated server.",
@@ -114,54 +115,29 @@ async function runStdio(bridge: BridgeClient): Promise<void> {
   const server = buildServer(bridge);
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  let shuttingDown = false;
+  const shutdown = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    // The SDK stdio transport does not close itself when stdin reaches EOF.
+    // Mark the bridge closed immediately, including any in-flight acquisition.
+    const released = bridge.close().catch(() => {});
+    void server.close().catch(() => {}).then(() => released);
+  };
+  server.server.onclose = shutdown;
+  process.stdin.once("end", shutdown);
+  process.stdin.once("close", shutdown);
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
   log(`stdio transport ready (bridge: ${process.env.MCPFABRIC_URL ?? "http://127.0.0.1:25599"})`);
 }
 
 async function runHttp(bridge: BridgeClient, cfg: ServerConfig): Promise<void> {
-  // Stateful streamable-HTTP: one transport+server per session id.
-  const sessions = new Map<string, { server: McpServer; transport: StreamableHTTPServerTransport }>();
-
-  async function readBody(req: http.IncomingMessage): Promise<unknown> {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(chunk as Buffer);
-    if (chunks.length === 0) return undefined;
-    try {
-      return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    } catch {
-      return undefined;
-    }
-  }
-
-  const httpServer = http.createServer(async (req, res) => {
-    if (!req.url || !req.url.startsWith("/mcp")) {
-      res.writeHead(404).end("Not found");
-      return;
-    }
-    const sessionId = req.headers["mcp-session-id"];
-    const sid = Array.isArray(sessionId) ? sessionId[0] : sessionId;
-    const body = req.method === "POST" ? await readBody(req) : undefined;
-
-    let entry = sid ? sessions.get(sid) : undefined;
-    if (!entry) {
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (id: string) => {
-          sessions.set(id, entry!);
-        },
-      });
-      transport.onclose = () => {
-        if (transport.sessionId) sessions.delete(transport.sessionId);
-      };
-      const server = buildServer(bridge);
-      await server.connect(transport);
-      entry = { server, transport };
-    }
-    await entry.transport.handleRequest(req, res, body);
+  const httpServer = createHttpServer(cfg, () => {
+    const sessionBridge = bridge.fork();
+    return { server: buildServer(sessionBridge), close: () => sessionBridge.close() };
   });
-
-  httpServer.listen(cfg.httpPort, "127.0.0.1", () => {
-    log(`streamable-HTTP transport ready on http://127.0.0.1:${cfg.httpPort}/mcp`);
-  });
+  httpServer.listen(cfg.httpPort, "127.0.0.1", () => log("authenticated streamable-HTTP transport ready"));
 }
 
 async function main(): Promise<void> {

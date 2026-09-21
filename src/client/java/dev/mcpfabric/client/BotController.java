@@ -45,6 +45,42 @@ public final class BotController {
 	private int stuckTicks;
 	private volatile String navState = "idle";
 	private boolean drivingKeys;
+	private boolean usingByBot;
+	private Object previousLevel, previousPlayer;
+	private boolean previousDead;
+	private long leaseGeneration = -1;
+
+	public synchronized void startUsing(Minecraft mc) { usingByBot = true; mc.options.keyUse.setDown(true); }
+	public synchronized void stopUsing(Minecraft mc) {
+		if (usingByBot) {
+			mc.options.keyUse.setDown(false);
+			if (mc.player != null && mc.gameMode != null) mc.gameMode.releaseUsingItem(mc.player);
+			usingByBot = false;
+		}
+	}
+	public synchronized void stopAll(Minecraft mc, String reason) {
+		stopNavigation(reason);
+		stopAllMovement();
+		if (miningPos != null && mc.gameMode != null) mc.gameMode.stopDestroyBlock();
+		stopMining();
+		stopUsing(mc);
+		if (drivingKeys) { releaseKeys(mc.options); drivingKeys = false; }
+	}
+	public synchronized void synchronizeLifecycle(Minecraft mc) {
+		var lease = dev.mcpfabric.McpFabric.router().lease();
+		boolean dead = mc.player != null && !mc.player.isAlive();
+		boolean changed = previousLevel != mc.level || previousPlayer != mc.player || dead != previousDead;
+		if (changed) {
+			stopAll(mc, "world_changed");
+			// Initial entry also invalidates commands admitted against a different connection.
+			lease.revoke();
+			previousLevel = mc.level; previousPlayer = mc.player; previousDead = dead;
+		}
+		if (!lease.active() || leaseGeneration != lease.generation() || !dev.mcpfabric.McpFabric.config().enablePlayerControl) {
+			stopAll(mc, "control_released");
+		}
+		leaseGeneration = lease.generation();
+	}
 
 	// --- public control surface (called from handlers, on the render thread) ----------------
 
@@ -120,8 +156,9 @@ public final class BotController {
 	// --- tick --------------------------------------------------------------------------------
 
 	public void onClientTick(Minecraft mc) {
+		synchronizeLifecycle(mc);
 		LocalPlayer p = mc.player;
-		if (p == null) {
+		if (p == null || !p.isAlive()) {
 			return;
 		}
 
@@ -191,7 +228,7 @@ public final class BotController {
 			return;
 		}
 		if (pathIndex >= path.size()) {
-			stopNavigationInternal("reached");
+			stopNavigationInternal("path_exhausted");
 			return;
 		}
 

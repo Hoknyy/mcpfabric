@@ -59,7 +59,8 @@ public class McpFabric implements ModInitializer {
 		config = McpConfig.load();
 		sseHub = new SseHub();
 		eventBus = new EventBus(sseHub);
-		router = new RpcRouter();
+		router = new RpcRouter(config);
+		router.registerControl();
 
 		// Capture the running server (dedicated or integrated).
 		ServerLifecycleEvents.SERVER_STARTED.register(ServerHolder::set);

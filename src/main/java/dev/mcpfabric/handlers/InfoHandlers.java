@@ -22,6 +22,9 @@ public final class InfoHandlers {
 
 			JsonObject o = new JsonObject();
 			o.addProperty("mod", "mcpfabric");
+			o.addProperty("bridgeProtocol", 2);
+			o.add("readOnlyMethods", dev.mcpfabric.bridge.RpcPolicy.readMethods());
+			o.addProperty("controlLeaseRequired", true);
 			o.addProperty("modVersion", McpFabric.MOD_VERSION);
 			o.addProperty("minecraftVersion", McpFabric.MC_VERSION);
 			o.addProperty("side", client ? "client" : "dedicated_server");

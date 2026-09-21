@@ -15,10 +15,12 @@ export interface ServerConfig {
   transport: "stdio" | "http";
   /** Port for the streamable-HTTP transport (only used when transport === "http"). */
   httpPort: number;
+  httpToken: string | undefined;
 }
 
 function int(value: string | undefined, fallback: number): number {
   const n = value === undefined ? NaN : Number.parseInt(value, 10);
+  if (value !== undefined && (!/^\d+$/.test(value) || !Number.isSafeInteger(n) || n < 1)) throw new Error("Expected a positive integer configuration value.");
   return Number.isFinite(n) ? n : fallback;
 }
 
@@ -32,11 +34,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     throw new Error(`MCPFABRIC_TRANSPORT must be "stdio" or "http", got "${transport}"`);
   }
 
+  if (transport === "http" && !env.MCPFABRIC_HTTP_TOKEN) throw new Error("MCPFABRIC_HTTP_TOKEN is required for HTTP transport.");
+  const httpPort = int(env.MCPFABRIC_HTTP_PORT, 25600);
+  if (httpPort > 65535) throw new Error("Invalid HTTP port.");
   return {
     bridgeUrl,
     token: env.MCPFABRIC_TOKEN || undefined,
     timeoutMs: int(env.MCPFABRIC_TIMEOUT_MS, 15000),
     transport,
-    httpPort: int(env.MCPFABRIC_HTTP_PORT, 25600),
+    httpPort,
+    httpToken: env.MCPFABRIC_HTTP_TOKEN || undefined,
   };
 }

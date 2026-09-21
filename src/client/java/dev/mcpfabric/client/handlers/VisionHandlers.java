@@ -82,6 +82,9 @@ public final class VisionHandlers {
 			double maxDistance = ctx.optDouble("maxDistance", 48.0);
 			int cols = ctx.optInt("rayColumns", 9);
 			int rows = ctx.optInt("rayRows", 5);
+			if (!Double.isFinite(maxDistance) || maxDistance <= 0 || maxDistance > 128 || cols < 1 || cols > 33 || rows < 1 || rows > 33) {
+				throw RpcException.badRequest("Scene bounds: distance (0,128], columns 1-33, rows 1-33.");
+			}
 
 			JsonObject o = new JsonObject();
 			Vec3 eye = p.getEyePosition();

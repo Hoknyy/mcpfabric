@@ -26,8 +26,10 @@ public final class McpConfig {
 	/** When false, the bridge accepts unauthenticated requests (loopback only — use with care). */
 	public boolean requireAuth = true;
 
-	/** Max time a single RPC may block the game thread before timing out. */
+	/** Deadline for waiting on game-thread work; running actions cannot be undone. */
 	public int callTimeoutMs = 8000;
+	/** An unattended controller loses ownership and releases held inputs. */
+	public int controlLeaseMs = 10000;
 
 	// capability gates ------------------------------------------------------------------------
 	public boolean enableWorldWrite = true;
