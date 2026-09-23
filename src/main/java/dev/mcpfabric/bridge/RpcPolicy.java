@@ -9,7 +9,8 @@ public final class RpcPolicy {
 		"info.status", "info.capabilities", "chat.getRecent", "events.getRecent", "control.status",
 		"world.getBlock", "world.getBlocks", "world.findBlocks", "world.getTimeAndWeather", "world.getDimensions", "world.raycast",
 		"entities.query", "entities.get", "players.list", "players.get", "player.getState", "player.getInventory",
-		"player.getEquipment", "player.getStatusEffects", "gui.list", "container.read", "vision.screenshot", "vision.describeScene", "nav.status");
+		"player.getEquipment", "player.getStatusEffects", "gui.list", "container.read", "vision.screenshot", "vision.describeScene", "nav.status",
+		"connection.status");
 	private static final Set<String> STOPS = Set.of("control.stop", "control.stopAll", "control.stopUsing", "nav.stop");
 	private static final Set<String> SESSIONS = Set.of("control.acquire", "control.heartbeat", "control.release");
 	private RpcPolicy() {}
@@ -17,7 +18,7 @@ public final class RpcPolicy {
 	public static boolean isMutation(String method) { return !READS.contains(method) && !STOPS.contains(method) && !SESSIONS.contains(method); }
 	public static boolean isClientMutation(String method) {
 		return isMutation(method) && (method.startsWith("control.") || method.startsWith("interact.") || method.startsWith("inventory.")
-			|| method.startsWith("gui.") || method.startsWith("container.") || method.startsWith("nav.") || method.equals("chat.send"));
+			|| method.startsWith("gui.") || method.startsWith("connection.") || method.startsWith("container.") || method.startsWith("nav.") || method.equals("chat.send"));
 	}
 	public static void check(McpConfig cfg, ControlLease lease, RpcContext ctx) throws RpcException {
 		String m = ctx.method();

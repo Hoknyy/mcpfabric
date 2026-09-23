@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 const STEP_KEYS = new Set(['call', 'args', 'expect', 'expect_chat', 'console', 'wait', 'log', 'retry', 'timeout', 'interval', 'optional', 'save', 'screenshot', 'when']);
-const SAFE_READS = new Set(['info.status', 'info.capabilities', 'player.getState', 'player.getInventory', 'player.getEquipment', 'player.getStatusEffects', 'container.read', 'gui.list', 'chat.getRecent', 'events.getRecent', 'vision.screenshot', 'vision.describeScene', 'nav.status', 'control.status']);
+const SAFE_READS = new Set(['info.status', 'info.capabilities', 'player.getState', 'player.getInventory', 'player.getEquipment', 'player.getStatusEffects', 'container.read', 'gui.list', 'chat.getRecent', 'events.getRecent', 'vision.screenshot', 'vision.describeScene', 'nav.status', 'control.status', 'connection.status']);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 const finite = x => typeof x === 'number' && Number.isFinite(x);
@@ -68,6 +68,71 @@ export function validateScenario(scenario, reads = SAFE_READS) {
   return scenario;
 }
 
+// Canonical SNBT: compound keys sorted, whitespace dropped. Minecraft prints compounds in
+// hash-map order, which may differ between servers for the same data.
+export function canonicalSnbt(text) {
+  const s = String(text);
+  let i = 0;
+  const ws = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+  const invalid = () => { throw new Error('Invalid SNBT at ' + i); };
+  const quoted = () => {
+    const quote = s[i++];
+    let out = '';
+    while (i < s.length && s[i] !== quote) out += s[i] === '\\' ? s[(i += 2) - 1] : s[i++];
+    if (s[i++] !== quote) invalid();
+    return out;
+  };
+  const bare = () => {
+    const start = i;
+    while (i < s.length && /[0-9A-Za-z_\-.+]/.test(s[i])) i++;
+    if (start === i) invalid();
+    return s.slice(start, i);
+  };
+  const value = () => {
+    ws();
+    if (s[i] === '{') {
+      i++; ws();
+      const entries = [];
+      if (s[i] === '}') { i++; return '{}'; }
+      for (;;) {
+        ws();
+        const key = s[i] === '"' || s[i] === "'" ? quoted() : bare();
+        ws(); if (s[i++] !== ':') invalid();
+        entries.push([key, value()]);
+        ws();
+        if (s[i] === ',') { i++; continue; }
+        if (s[i++] === '}') break;
+        invalid();
+      }
+      entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      if (entries.some(([key], n) => n && key === entries[n - 1][0])) invalid();
+      return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + v).join(',') + '}';
+    }
+    if (s[i] === '[') {
+      i++; ws();
+      let prefix = '';
+      if (/[BIL]/.test(s[i]) && s[i + 1] === ';') { prefix = s[i] + ';'; i += 2; }
+      const items = [];
+      ws();
+      if (s[i] === ']') { i++; return '[' + prefix + ']'; }
+      for (;;) {
+        items.push(value());
+        ws();
+        if (s[i] === ',') { i++; continue; }
+        if (s[i++] === ']') break;
+        invalid();
+      }
+      return '[' + prefix + items.join(',') + ']';
+    }
+    if (s[i] === '"' || s[i] === "'") return JSON.stringify(quoted());
+    return bare();
+  };
+  const out = value();
+  ws();
+  if (i !== s.length) invalid();
+  return out;
+}
+
 function itemCount(inv, id) { return [...(inv?.hotbar ?? []), ...(inv?.main ?? []), ...(inv?.armor ?? []), inv?.offhand].filter(Boolean).reduce((n, item) => n + (item.id === id ? item.count : 0), 0); }
 export function checkExpectations(result, expect) {
   const failures = [];
@@ -83,6 +148,12 @@ export function checkExpectations(result, expect) {
       for (const [path, value] of Object.entries(want)) {
         const got = getPath(result, path);
         fail(key === 'contains' ? typeof got === 'string' && typeof value === 'string' && got.includes(value) : finite(got) && finite(value) && (key === 'gte' ? got >= value : got <= value), 'Failed ' + key + ': ' + path);
+      }
+    } else if (key === 'snbtEquals') {
+      for (const [path, value] of Object.entries(want)) {
+        let same = false;
+        try { same = canonicalSnbt(getPath(result, path)) === canonicalSnbt(value); } catch { same = false; }
+        fail(same, 'SNBT differs at ' + path);
       }
     } else if (key === 'nearPosition') {
       const { baseline, tolerance = 1 } = want;
@@ -159,7 +230,11 @@ export async function runScenario(scenario, { bridge, cfg, artifacts, vars: supp
         const args = { ...(step.args ?? {}) };
         const mutates = !reads.has(step.call);
         if (mutates) {
-          await checkTarget();
+          // A join happens outside any world: the only precondition is the configured address;
+          // the following reads re-bind the identity through checkTarget.
+          if (step.call === 'connection.join') {
+            if (args.address !== cfg.serverAddress) throw new Error('connection.join is limited to the configured server address.');
+          } else await checkTarget();
           if (step.call === 'container.click') {
             if (!lastContainer) throw new Error('Read and assert the container before clicking.');
             Object.assign(args, { expectedMenuId: lastContainer.menuId, expectedStateId: lastContainer.stateId, expectedTitle: lastContainer.title });

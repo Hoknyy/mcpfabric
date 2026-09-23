@@ -36,6 +36,8 @@ public final class McpConfig {
 	public boolean enableCommands = true;
 	public boolean enablePlayerControl = true;
 	public boolean enableVision = true;
+	/** Exact addresses connection.join may connect to (empty: joining is refused). */
+	public java.util.List<String> allowedJoinAddresses = new java.util.ArrayList<>();
 
 	public transient Path source;
 
@@ -54,6 +56,7 @@ public final class McpConfig {
 		} else {
 			cfg = new McpConfig();
 		}
+		if (cfg.allowedJoinAddresses == null) cfg.allowedJoinAddresses = new java.util.ArrayList<>();
 		if (cfg.token == null || cfg.token.isBlank()) {
 			cfg.token = UUID.randomUUID().toString().replace("-", "");
 		}

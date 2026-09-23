@@ -105,3 +105,41 @@ test('console log annotations preserve setup and teardown execution', async () =
   assert.equal(result.status, 'PASS');
   assert.deepEqual(commands, [['survival', 'fixture setup'], ['survival', 'fixture cleanup']]);
 });
+
+test('SNBT comparison ignores compound key order but not values, lists or types', async () => {
+  const { canonicalSnbt } = await import('../scenario.mjs');
+  const spawn = '{Slot: 0b, id: "minecraft:netherite_pickaxe", count: 1, components: {"minecraft:lore": [{italic: 0b, text: "S-05", color: "gray"}], "minecraft:enchantments": {"minecraft:fortune": 3, "minecraft:efficiency": 5}, "minecraft:custom_name": {italic: 0b, text: "A5 Pioche"}, "minecraft:damage": 123}}';
+  const shard = '{Slot: 0b, id: "minecraft:netherite_pickaxe", count: 1, components: {"minecraft:lore": [{italic: 0b, text: "S-05", color: "gray"}], "minecraft:custom_name": {italic: 0b, text: "A5 Pioche"}, "minecraft:enchantments": {"minecraft:efficiency": 5, "minecraft:fortune": 3}, "minecraft:damage": 123}}';
+  assert.equal(canonicalSnbt(spawn), canonicalSnbt(shard));
+  const at = text => ({ messages: [{ data: { text } }] });
+  assert.deepEqual(checkExpectations(at(shard), { snbtEquals: { 'messages.0.data.text': spawn } }), []);
+  for (const changed of [
+    shard.replace('"minecraft:damage": 123', '"minecraft:damage": 124'),
+    shard.replace('"minecraft:fortune": 3', '"minecraft:fortune": 3s'),
+    shard.replace('[{italic: 0b, text: "S-05", color: "gray"}]', '[]'),
+    shard.replace(', "minecraft:damage": 123', ''),
+    'not snbt {',
+  ]) assert.ok(checkExpectations(at(changed), { snbtEquals: { 'messages.0.data.text': spawn } }).length, changed);
+  assert.notEqual(canonicalSnbt('[{a: 1}, {b: 2}]'), canonicalSnbt('[{b: 2}, {a: 1}]'));
+  assert.equal(canonicalSnbt('{s: "a\\"b"}'), canonicalSnbt("{s: 'a\"b'}"));
+  assert.throws(() => canonicalSnbt('{a: 1, a: 2}'));
+});
+
+test('reconnect: join needs no world but only reaches the configured address, then identity is re-checked', async () => {
+  let inWorld = true;
+  const state = () => { if (!inWorld) throw new Error('Not in world'); return identity; };
+  const bridge = mock({ 'player.getState': state, 'connection.disconnect': () => { inWorld = false; return { disconnected: true }; }, 'connection.join': () => { inWorld = true; return { connecting: true }; } });
+  const journey = scenario([
+    { call: 'connection.disconnect' },
+    { call: 'connection.join', args: { address: 'staging:25565' } },
+    { call: 'player.getState', retry: 2, expect: { name: 'Tester' } },
+  ]);
+  assert.equal((await run(journey, bridge)).status, 'PASS');
+  const joinAt = bridge.calls.findIndex(c => c.method === 'connection.join');
+  assert.notEqual(bridge.calls[joinAt - 1].method, 'player.getState');
+  inWorld = false;
+  const elsewhere = mock({ 'player.getState': state });
+  const refused = await run(scenario([{ call: 'connection.join', args: { address: 'evil:25565' } }, { call: 'player.getState', expect: { name: 'Tester' } }]), elsewhere);
+  assert.equal(refused.status, 'FAIL');
+  assert.ok(!elsewhere.calls.some(c => c.method === 'connection.join'));
+});

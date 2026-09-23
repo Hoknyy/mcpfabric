@@ -53,6 +53,7 @@ public final class InfoHandlers {
 			groups.addProperty("player_local", client);
 			groups.addProperty("control", client && McpFabric.config().enablePlayerControl);
 			groups.addProperty("interact", client && McpFabric.config().enablePlayerControl);
+			groups.addProperty("connection", client && McpFabric.config().enablePlayerControl && !McpFabric.config().allowedJoinAddresses.isEmpty());
 			groups.addProperty("inventory", client);
 			groups.addProperty("gui", client);
 			groups.addProperty("container", client);

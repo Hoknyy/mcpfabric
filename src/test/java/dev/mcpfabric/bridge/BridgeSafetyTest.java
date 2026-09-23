@@ -45,14 +45,17 @@ public final class BridgeSafetyTest {
 		McpConfig cfg = new McpConfig(); ControlLease live = new ControlLease();
 		JsonObject params = new JsonObject(); params.addProperty("_session", live.acquire(10000));
 		cfg.enablePlayerControl = false;
-		for (String method : new String[]{"control.setInput", "control.look", "control.startUsing", "inventory.dropSlot", "interact.dropItem", "gui.click", "gui.type", "gui.key", "container.click", "nav.pathTo"}) {
+		for (String method : new String[]{"control.setInput", "control.look", "control.startUsing", "inventory.dropSlot", "interact.dropItem", "gui.click", "gui.type", "gui.key", "container.click", "nav.pathTo", "connection.disconnect", "connection.join"}) {
 			rejected(() -> { RpcPolicy.check(cfg, live, new RpcContext(method, params)); return null; }, "unavailable");
 		}
-		for (String method : new String[]{"player.getState", "gui.list", "container.read", "control.stop", "control.stopAll", "nav.stop"}) RpcPolicy.check(cfg, live, new RpcContext(method, new JsonObject()));
+		for (String method : new String[]{"player.getState", "gui.list", "container.read", "connection.status", "control.stop", "control.stopAll", "nav.stop"}) RpcPolicy.check(cfg, live, new RpcContext(method, new JsonObject()));
 		cfg.enableVision = false;
 		for (String method : new String[]{"vision.screenshot", "vision.describeScene"}) rejected(() -> { RpcPolicy.check(cfg, live, new RpcContext(method, params)); return null; }, "unavailable");
 		cfg.enablePlayerControl = true;
 		RpcPolicy.check(cfg, live, new RpcContext("gui.click", params)); // No player-present prerequisite: pre-join GUI works.
+		RpcPolicy.check(cfg, live, new RpcContext("connection.join", params)); // Allowed by policy; the handler still requires allowedJoinAddresses.
+		rejected(() -> { RpcPolicy.check(cfg, live, new RpcContext("connection.join", new JsonObject())); return null; }, "control_lease_required");
+		check(new McpConfig().allowedJoinAddresses.isEmpty(), "Joining must be refused by default");
 
 		AtomicReference<Runnable> pending = new AtomicReference<>(); CountDownLatch admitted = new CountDownLatch(1);
 		ExecutorService caller = Executors.newSingleThreadExecutor();

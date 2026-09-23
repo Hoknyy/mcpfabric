@@ -28,6 +28,9 @@ Fait (branche `lato/dev`) :
 - `gui.close` ;
 - `container.read` / `container.click` : lecture des slots non vides et clic
   slot (pickup, quick_move, throw, swap, bouton gauche/droit).
+- `connection.status` / `connection.disconnect` / `connection.join` : quitter le
+  serveur comme le bouton du menu pause et rejoindre une adresse listée dans
+  `allowedJoinAddresses` (vide par défaut : connexion refusée), en 26.2 ;
 - Compatibilité : API d'événements GUI par records à partir de 1.21.9
   (`MouseButtonEvent`, `CharacterEvent`, `KeyEvent`) ; accès à l'écran courant
   via `mc.gui.screen()` à partir de 26.2.

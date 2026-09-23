@@ -6,7 +6,7 @@ Minecraft. Les actions restent soumises aux permissions du joueur sur le serveur
 ## Préparation
 
 1. Construire le MCP : `cd mcp-server`, `npm ci`, `npm run build`.
-2. Installer le JAR Lato `0.2.2-lato.1+26.2` dans le profil Fabric 26.2, puis redémarrer Minecraft.
+2. Installer le JAR Lato `0.2.2-lato.2+26.2` dans le profil Fabric 26.2, puis redémarrer Minecraft.
 3. Depuis `harness`, `npm ci`, puis `node runner.mjs --doctor` une fois connecté au staging.
 
 Le doctor compare l'identité réellement renvoyée par le mod et l'adresse du serveur avec
@@ -73,10 +73,15 @@ teardown:
   suivantes pour éviter d'agir à partir d'une précondition fausse.
 - `optional: true` : uniquement pour `gui.close` lorsqu'aucun écran n'est ouvert.
 - `wait` : pause bornée ; préférer une lecture avec assertion et retry.
+- `connection.disconnect` puis `connection.join` : reconnexion sans humain. Le join
+  n'exige pas de monde chargé mais seulement l'adresse de la configuration, qui doit
+  aussi figurer dans `allowedJoinAddresses` du mod ; relire ensuite `player.getState`
+  avec `retry` pour réassocier l'identité.
 - `continueOnError` : poursuit les étapes, mais conserve le statut FAIL.
 
 Assertions : égalité sur chemin (`title`, `items.0.name`), `itemAt`, `loreContains`,
-`contains`, `gte`, `lte`, `inventoryCount`, `inventoryDelta` et `nearPosition`.
+`contains`, `gte`, `lte`, `inventoryCount`, `inventoryDelta`, `nearPosition` et
+`snbtEquals` (égalité NBT d'un texte SNBT, ordre d'affichage des clés ignoré).
 Exemple : `nearPosition: {baseline: "{{destination}}", tolerance: 2}` compare les trois
 coordonnées ET la dimension. `inventoryDelta: {baseline: "{{avant}}", id: "minecraft:wheat",
 delta: 1}` vérifie la livraison. L'ancien `expect.chatContains` est refusé.
