@@ -390,6 +390,15 @@ export const TOOLS: ToolDef[] = [
     inputSchema: {},
     annotations: READ,
   },
+  {
+    name: "get_tab_list",
+    method: "players.tabList",
+    title: "Read the tab list",
+    description:
+      "Client-only. Every player entry the server sent to this client: uuid, profile name, plain-text displayName (when set), gameMode, latency and listed (false = known to the client but not shown in the tab), plus the tab header and footer as plain text.",
+    inputSchema: {},
+    annotations: READ,
+  },
 
   // ===== control (client) ====================================================================
   {

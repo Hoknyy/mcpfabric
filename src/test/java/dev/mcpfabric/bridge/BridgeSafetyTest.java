@@ -49,6 +49,11 @@ public final class BridgeSafetyTest {
 			rejected(() -> { RpcPolicy.check(cfg, live, new RpcContext(method, params)); return null; }, "unavailable");
 		}
 		for (String method : new String[]{"player.getState", "gui.list", "container.read", "connection.status", "control.stop", "control.stopAll", "nav.stop"}) RpcPolicy.check(cfg, live, new RpcContext(method, new JsonObject()));
+		// The tab list is a pure read: no lease, and available with player control and server writes disabled.
+		cfg.enableWorldWrite = false;
+		RpcPolicy.check(cfg, live, new RpcContext("players.tabList", new JsonObject()));
+		cfg.enableWorldWrite = true;
+		check(!RpcPolicy.isMutation("players.tabList") && RpcPolicy.readMethods().contains(new com.google.gson.JsonPrimitive("players.tabList")), "players.tabList must be advertised read-only");
 		cfg.enableVision = false;
 		for (String method : new String[]{"vision.screenshot", "vision.describeScene"}) rejected(() -> { RpcPolicy.check(cfg, live, new RpcContext(method, params)); return null; }, "unavailable");
 		cfg.enablePlayerControl = true;
@@ -71,6 +76,6 @@ public final class BridgeSafetyTest {
 			check(outcome.get().equals("control_lease_required"), "Revoked queued mutation admitted");
 			check(effects.get() == before, "Revoked mutation ran");
 		} finally { caller.shutdownNow(); }
-		System.out.println("PASS BridgeSafetyTest: expiry, exclusivity, queued cancellation, uncertain running action, capabilities, pre-join GUI and execution-time lease check");
+		System.out.println("PASS BridgeSafetyTest: expiry, exclusivity, queued cancellation, uncertain running action, capabilities, read-only tab list, pre-join GUI and execution-time lease check");
 	}
 }

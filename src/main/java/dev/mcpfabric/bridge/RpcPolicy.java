@@ -8,7 +8,7 @@ public final class RpcPolicy {
 	private static final Set<String> READS = Set.of(
 		"info.status", "info.capabilities", "chat.getRecent", "events.getRecent", "control.status",
 		"world.getBlock", "world.getBlocks", "world.findBlocks", "world.getTimeAndWeather", "world.getDimensions", "world.raycast",
-		"entities.query", "entities.get", "players.list", "players.get", "player.getState", "player.getInventory",
+		"entities.query", "entities.get", "players.list", "players.get", "players.tabList", "player.getState", "player.getInventory",
 		"player.getEquipment", "player.getStatusEffects", "gui.list", "container.read", "vision.screenshot", "vision.describeScene", "nav.status",
 		"connection.status");
 	private static final Set<String> STOPS = Set.of("control.stop", "control.stopAll", "control.stopUsing", "nav.stop");

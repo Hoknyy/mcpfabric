@@ -162,3 +162,22 @@ test('real stdio process releases its lease on stdin EOF before expiry', async (
     assert.equal(owner, undefined); assert.equal(releases, 1);
   } finally { await client.close().catch(() => {}); await close(server); }
 });
+
+test('tab list tool is catalogued read-only and called without a control lease', async () => {
+  const { TOOLS } = await import('../dist/tools.js');
+  const tool = TOOLS.find(t => t.method === 'players.tabList');
+  assert.equal(tool?.name, 'get_tab_list'); assert.equal(tool.annotations?.readOnlyHint, true);
+  const calls = [];
+  const { server, url } = await mockBridge(({ method }, res) => {
+    calls.push(method);
+    const ok = result => res.end(JSON.stringify({ ok: true, result }));
+    if (method === 'info.status') return ok({ bridgeProtocol: 2, readOnlyMethods: ['players.tabList'] });
+    if (method === 'players.tabList') return ok({ count: 0, listedCount: 0, players: [] });
+    res.end(JSON.stringify({ ok: false, error: { code: 'unexpected', message: method } }));
+  });
+  const bridge = new BridgeClient(url, 'dummy', 500);
+  try {
+    assert.deepEqual(await bridge.call('players.tabList'), { count: 0, listedCount: 0, players: [] });
+    assert.deepEqual(calls, ['info.status', 'players.tabList']);
+  } finally { await bridge.close(); await close(server); }
+});

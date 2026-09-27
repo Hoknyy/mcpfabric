@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.mcpfabric.client.mixin",
+	"compatibilityLevel": "JAVA_${java_dep}",
+	"client": [
+		"PlayerTabOverlayAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

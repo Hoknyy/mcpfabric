@@ -6,7 +6,7 @@ Minecraft. Les actions restent soumises aux permissions du joueur sur le serveur
 ## Préparation
 
 1. Construire le MCP : `cd mcp-server`, `npm ci`, `npm run build`.
-2. Installer le JAR Lato `0.2.2-lato.2+26.2` dans le profil Fabric 26.2, puis redémarrer Minecraft.
+2. Installer le JAR Lato `0.2.2-lato.3+26.2` dans le profil Fabric 26.2, puis redémarrer Minecraft.
 3. Depuis `harness`, `npm ci`, puis `node runner.mjs --doctor` une fois connecté au staging.
 
 Le doctor compare l'identité réellement renvoyée par le mod et l'adresse du serveur avec
@@ -81,11 +81,29 @@ teardown:
 
 Assertions : égalité sur chemin (`title`, `items.0.name`), `itemAt`, `loreContains`,
 `contains`, `gte`, `lte`, `inventoryCount`, `inventoryDelta`, `nearPosition` et
-`snbtEquals` (égalité NBT d'un texte SNBT, ordre d'affichage des clés ignoré).
+`snbtEquals` (égalité NBT d'un texte SNBT, ordre d'affichage des clés ignoré),
+`includes` / `excludes` (une liste contient / ne contient aucune entrée dont les champs
+donnés sont égaux, chaînes comparées sans casse ; liste absente ou entrée vide : échec).
 Exemple : `nearPosition: {baseline: "{{destination}}", tolerance: 2}` compare les trois
 coordonnées ET la dimension. `inventoryDelta: {baseline: "{{avant}}", id: "minecraft:wheat",
 delta: 1}` vérifie la livraison. L'ancien `expect.chatContains` est refusé.
 Un scénario vide ou dépourvu d'assertion n'est pas un test valide.
+
+`players.tabList` (lecture seule, sans bail) rend `header`, `footer` (texte brut, absents
+s'ils ne sont pas définis), `count`, `listedCount` et `players` : `uuid`, `name` (profil),
+`displayName` (texte brut, absent sans nom de tab), `gameMode`, `latency` et `listed`
+(`false` : joueur connu du client mais non affiché dans le tab). Absence d'un joueur du tab
+affiché, avec la présence du joueur piloté comme contrôle :
+
+```yaml
+  - call: players.tabList
+    retry: { timeout: 15, interval: 1 }
+    expect:
+      includes: { players: { name: "{{player}}", listed: true } }
+      excludes: { players: { name: Tikifirst, listed: true } }
+```
+
+Sans `listed: true`, `excludes` exige l'absence totale de l'entrée côté client.
 
 Avant `container.click`, lire/assertir le conteneur : le runner réutilise le `menuId`,
 le `stateId` et le titre observés. Une mutation invalide ce cache. Les utilisateurs des

@@ -143,3 +143,30 @@ test('reconnect: join needs no world but only reaches the configured address, th
   assert.equal(refused.status, 'FAIL');
   assert.ok(!elsewhere.calls.some(c => c.method === 'connection.join'));
 });
+
+test('tab list: includes/excludes match partial entries and fail closed on a missing list or empty entry', () => {
+  const tab = { header: 'Khraal', players: [
+    { uuid: '11111111-1111-1111-1111-111111111111', name: 'Tester', listed: true },
+    { uuid: '22222222-2222-2222-2222-222222222222', name: 'Tikifirst', listed: false },
+  ] };
+  assert.deepEqual(checkExpectations(tab, { includes: { players: { name: 'tester', listed: true } }, excludes: { players: { name: 'Tikifirst', listed: true } } }), []);
+  assert.ok(checkExpectations(tab, { excludes: { players: { name: 'TIKIFIRST' } } }).length, 'an unlisted entry is still present');
+  assert.ok(checkExpectations(tab, { includes: { players: { name: 'Tikifirst', listed: true } } }).length);
+  assert.deepEqual(checkExpectations(tab, { excludes: { players: [{ name: 'Ghost' }, { uuid: '33333333-3333-3333-3333-333333333333' }] } }), []);
+  for (const bad of [{ excludes: { player: { name: 'Ghost' } } }, { excludes: { players: {} } }, { excludes: { players: [] } }, { includes: { header: { name: 'Tester' } } }]) {
+    assert.ok(checkExpectations(tab, bad).length, JSON.stringify(bad));
+  }
+});
+
+test('players.tabList is a read: retried until the player leaves the tab, without an action cursor', async () => {
+  const spec = scenario([{ call: 'players.tabList', retry: { timeout: 1, interval: 0.01 }, expect: { includes: { players: { name: '{{player}}', listed: true } }, excludes: { players: { name: 'Tikifirst', listed: true } } } }]);
+  validateScenario(spec);
+  let refresh = 0;
+  const bridge = mock({
+    'info.status': () => ({ bridgeProtocol: 2, readOnlyMethods: [...reads, 'players.tabList'] }),
+    'players.tabList': () => ({ players: [{ name: 'Tester', listed: true }, ...(++refresh < 3 ? [{ name: 'Tikifirst', listed: true }] : [])] }),
+  });
+  const result = await run(spec, bridge);
+  assert.equal(result.status, 'PASS'); assert.equal(refresh, 3);
+  assert.ok(!bridge.calls.some(c => c.method === 'events.getRecent'), 'a read must not be handled as an action');
+});

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
 const STEP_KEYS = new Set(['call', 'args', 'expect', 'expect_chat', 'console', 'wait', 'log', 'retry', 'timeout', 'interval', 'optional', 'save', 'screenshot', 'when']);
-const SAFE_READS = new Set(['info.status', 'info.capabilities', 'player.getState', 'player.getInventory', 'player.getEquipment', 'player.getStatusEffects', 'container.read', 'gui.list', 'chat.getRecent', 'events.getRecent', 'vision.screenshot', 'vision.describeScene', 'nav.status', 'control.status', 'connection.status']);
+const SAFE_READS = new Set(['info.status', 'info.capabilities', 'player.getState', 'player.getInventory', 'player.getEquipment', 'player.getStatusEffects', 'container.read', 'gui.list', 'chat.getRecent', 'events.getRecent', 'vision.screenshot', 'vision.describeScene', 'nav.status', 'control.status', 'connection.status', 'players.tabList']);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 const finite = x => typeof x === 'number' && Number.isFinite(x);
@@ -133,6 +133,7 @@ export function canonicalSnbt(text) {
   return out;
 }
 
+const sameEntryValue = (got, want) => typeof got === 'string' && typeof want === 'string' ? got.toLowerCase() === want.toLowerCase() : isDeepStrictEqual(got, want);
 function itemCount(inv, id) { return [...(inv?.hotbar ?? []), ...(inv?.main ?? []), ...(inv?.armor ?? []), inv?.offhand].filter(Boolean).reduce((n, item) => n + (item.id === id ? item.count : 0), 0); }
 export function checkExpectations(result, expect) {
   const failures = [];
@@ -148,6 +149,18 @@ export function checkExpectations(result, expect) {
       for (const [path, value] of Object.entries(want)) {
         const got = getPath(result, path);
         fail(key === 'contains' ? typeof got === 'string' && typeof value === 'string' && got.includes(value) : finite(got) && finite(value) && (key === 'gte' ? got >= value : got <= value), 'Failed ' + key + ': ' + path);
+      }
+    } else if (key === 'includes' || key === 'excludes') {
+      // List membership by partial entry, e.g. excludes: { players: { name: Tikifirst, listed: true } }.
+      // Strings compare case-insensitively (player names, UUIDs). A missing list or an empty entry fails.
+      for (const [path, spec] of Object.entries(want)) {
+        const list = getPath(result, path), entries = [spec].flat();
+        if (!Array.isArray(list) || entries.length === 0) { fail(false, 'Failed ' + key + ': ' + path + ' is not a list or has no entry to check'); continue; }
+        for (const entry of entries) {
+          if (!object(entry) || Object.keys(entry).length === 0) { fail(false, 'Failed ' + key + ': empty entry for ' + path); continue; }
+          const found = list.some(el => Object.entries(entry).every(([field, value]) => sameEntryValue(getPath(el, field), value)));
+          fail(found === (key === 'includes'), (key === 'includes' ? 'Missing' : 'Unexpected') + ' entry in ' + path + ': ' + JSON.stringify(entry));
+        }
       }
     } else if (key === 'snbtEquals') {
       for (const [path, value] of Object.entries(want)) {

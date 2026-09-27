@@ -23,6 +23,12 @@
 			"dev.mcpfabric.client.McpFabricClient"
 		]
 	},
+	"mixins": [
+		{
+			"config": "mcpfabric.client.mixins.json",
+			"environment": "client"
+		}
+	],
 	"depends": {
 		"fabricloader": ">=${loader_version}",
 		"minecraft": "${minecraft_dep}",

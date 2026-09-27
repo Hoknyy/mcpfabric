@@ -31,6 +31,10 @@ Fait (branche `lato/dev`) :
 - `connection.status` / `connection.disconnect` / `connection.join` : quitter le
   serveur comme le bouton du menu pause et rejoindre une adresse listée dans
   `allowedJoinAddresses` (vide par défaut : connexion refusée), en 26.2 ;
+- `players.tabList` (lecture seule) : entrées de la liste des joueurs du client
+  (UUID, nom, nom affiché, mode de jeu, latence, listé ou non), en-tête et pied du
+  tab en texte brut (accesseur mixin client) ; assertions `includes` / `excludes`
+  du harnais ;
 - Compatibilité : API d'événements GUI par records à partir de 1.21.9
   (`MouseButtonEvent`, `CharacterEvent`, `KeyEvent`) ; accès à l'écran courant
   via `mc.gui.screen()` à partir de 26.2.
