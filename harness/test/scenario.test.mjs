@@ -105,6 +105,16 @@ test('a redrawn menu is read again and clicked only for the expected item or the
     if (wantClicks === 2) { assert.deepEqual(clicked, [12, 13]); assert.equal(result.steps[1].staleRetries, 1); }
   }
 });
+test('an optional close whose screen closed by itself in the meantime is skipped, a required one fails', async () => {
+  const gone = () => Object.assign(new Error('No screen is open.'), { code: 'bad_request' });
+  for (const [optional, wantStatus] of [[true, 'PASS'], [false, 'FAIL']]) {
+    const bridge = mock({ 'gui.list': () => ({ screen: 'PauseScreen', title: 'Game Menu' }), 'gui.close': () => { throw gone(); } });
+    const close = optional ? { call: 'gui.close', optional } : { call: 'gui.close' };
+    const result = await run(scenario([close, { call: 'player.getState', expect: { name: 'Tester' } }]), bridge);
+    assert.equal(result.status, wantStatus);
+    if (optional) assert.equal(result.steps[0].skipped, true);
+  }
+});
 test('menu cannot be clicked without observing it first', async () => {
   const bridge = mock();
   const result = await run(scenario([{ call: 'container.click', args: { slot: 10 } }, { call: 'player.getState', expect: { name: 'Tester' } }]), bridge);

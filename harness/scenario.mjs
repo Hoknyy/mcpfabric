@@ -292,6 +292,12 @@ export async function runScenario(scenario, { bridge, cfg, artifacts, vars: supp
               record.staleRetries = (record.staleRetries ?? 0) + 1;
               continue;
             }
+            // An optional close whose screen closed by itself between gui.list and gui.close: nothing left to close.
+            if (step.optional && step.call === 'gui.close' && err.code === 'bad_request' && err.message === 'No screen is open.') {
+              record.skipped = true;
+              result = undefined;
+              break;
+            }
             if (!reads.has(step.call) || !step.retry || Date.now() >= deadline || signal?.aborted || ['unauthorized', 'upgrade_required'].includes(err.code)) throw err;
             await sleep(interval * 1000);
           }
