@@ -5,6 +5,10 @@ import { isDeepStrictEqual } from 'node:util';
 
 const STEP_KEYS = new Set(['call', 'args', 'expect', 'expect_chat', 'console', 'wait', 'log', 'retry', 'timeout', 'interval', 'optional', 'save', 'screenshot', 'when']);
 const SAFE_READS = new Set(['info.status', 'info.capabilities', 'player.getState', 'player.getInventory', 'player.getEquipment', 'player.getStatusEffects', 'container.read', 'gui.list', 'chat.getRecent', 'events.getRecent', 'vision.screenshot', 'vision.describeScene', 'nav.status', 'control.status', 'connection.status', 'players.tabList']);
+const STALE_CLICK_RETRIES = 5;
+const slotItem = (container, slot) => (container?.items ?? []).find(item => item.slot === slot);
+const sameItem = (a, b) => a === undefined ? b === undefined
+  : b !== undefined && a.id === b.id && a.name === b.name && a.count === b.count;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 const finite = x => typeof x === 'number' && Number.isFinite(x);
@@ -265,6 +269,7 @@ export async function runScenario(scenario, { bridge, cfg, artifacts, vars: supp
         const timeout = typeof step.retry === 'number' ? step.retry : step.retry?.timeout ?? 0;
         const interval = typeof step.retry === 'object' ? step.retry.interval ?? 0.4 : 0.4;
         const deadline = Date.now() + timeout * 1000;
+        let clickBasis = step.call === 'container.click' ? lastContainer : undefined;
         for (;;) {
           try {
             record.attempts++;
@@ -273,6 +278,20 @@ export async function runScenario(scenario, { bridge, cfg, artifacts, vars: supp
             if (failures.length) throw new Error(failures.join(' | '));
             break;
           } catch (err) {
+            // A menu redrawn between the read and the click: the mod refused, nothing was clicked. The same menu is read
+            // again and clicked, a few times, when the step names the expected item (checked again by the mod) or when
+            // the clicked slot still holds the very item (id, name, count) the click was based on.
+            if (step.call === 'container.click' && err.code === 'stale_menu' && record.attempts <= STALE_CLICK_RETRIES
+                && !signal?.aborted) {
+              const fresh = await bridge.call('container.read');
+              if (fresh.menuId !== args.expectedMenuId || fresh.title !== args.expectedTitle) throw err;
+              const named = args.expectedItemName !== undefined || args.expectedItemId !== undefined;
+              if (!named && !sameItem(slotItem(clickBasis, args.slot), slotItem(fresh, args.slot))) throw err;
+              clickBasis = fresh;
+              args.expectedStateId = fresh.stateId;
+              record.staleRetries = (record.staleRetries ?? 0) + 1;
+              continue;
+            }
             if (!reads.has(step.call) || !step.retry || Date.now() >= deadline || signal?.aborted || ['unauthorized', 'upgrade_required'].includes(err.code)) throw err;
             await sleep(interval * 1000);
           }

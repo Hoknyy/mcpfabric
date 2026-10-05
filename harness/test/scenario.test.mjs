@@ -83,6 +83,28 @@ test('read retries wait for actual state, then click carries observed menu preco
   assert.equal(result.status, 'PASS'); assert.equal(count, 2);
   assert.deepEqual(bridge.calls.find(c => c.method === 'container.click').args, { slot: 10, expectedMenuId: 7, expectedStateId: 12, expectedTitle: 'Shop' });
 });
+test('a redrawn menu is read again and clicked only for the expected item or the very same slot item', async () => {
+  const stale = () => Object.assign(new Error('Container contents changed; read it again.'), { code: 'stale_menu' });
+  const paper = name => [{ slot: 10, id: 'minecraft:paper', name, count: 1 }];
+  for (const [args, menuAfter, itemAfter, wantStatus, wantClicks] of [
+    [{ slot: 10, expectedItemName: 'Blocs' }, 7, 'Blocs', 'PASS', 2],
+    [{ slot: 10 }, 7, 'Blocs', 'PASS', 2],
+    [{ slot: 10 }, 7, 'Visites', 'FAIL', 1],
+    [{ slot: 10, expectedItemId: 'minecraft:paper' }, 8, 'Blocs', 'FAIL', 1],
+  ]) {
+    let state = 12, reads = 0;
+    const clicked = [];
+    const bridge = mock({
+      'container.read': () => (reads++ === 0
+        ? { menuId: 7, stateId: state++, title: 'Shop', items: paper('Blocs') }
+        : { menuId: menuAfter, stateId: state++, title: 'Shop', items: paper(itemAfter) }),
+      'container.click': a => { clicked.push(a.expectedStateId); if (clicked.length === 1) throw stale(); return { ok: true }; },
+    });
+    const result = await run(scenario([{ call: 'container.read', expect: { title: 'Shop' } }, { call: 'container.click', args }]), bridge);
+    assert.equal(result.status, wantStatus); assert.equal(clicked.length, wantClicks);
+    if (wantClicks === 2) { assert.deepEqual(clicked, [12, 13]); assert.equal(result.steps[1].staleRetries, 1); }
+  }
+});
 test('menu cannot be clicked without observing it first', async () => {
   const bridge = mock();
   const result = await run(scenario([{ call: 'container.click', args: { slot: 10 } }, { call: 'player.getState', expect: { name: 'Tester' } }]), bridge);
