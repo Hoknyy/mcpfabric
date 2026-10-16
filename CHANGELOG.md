@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- `connection.join` re-reads `allowedJoinAddresses` from the config file when the requested
+  address is not in the startup list, so an address added while the game runs can be joined without
+  restarting Minecraft. Only that list is reloaded; host, port, token and permission flags keep their
+  startup values (`0.2.2-lato.4`).
+
 ## [0.2.1] - 2026-07-30
 
 ### Fixed

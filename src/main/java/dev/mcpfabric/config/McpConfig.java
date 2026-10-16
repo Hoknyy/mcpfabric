@@ -65,6 +65,24 @@ public final class McpConfig {
 		return cfg;
 	}
 
+	/**
+	 * Re-reads only {@code allowedJoinAddresses} from the config file, so an address added while the
+	 * game runs can be joined without a restart. Host, port, token and permission flags keep their
+	 * startup values. On a read error the current list is kept.
+	 */
+	public java.util.List<String> reloadAllowedJoinAddresses() {
+		if (source == null || !Files.exists(source)) return allowedJoinAddresses;
+		try {
+			McpConfig fresh = GSON.fromJson(Files.readString(source), McpConfig.class);
+			if (fresh != null && fresh.allowedJoinAddresses != null) {
+				allowedJoinAddresses = new java.util.ArrayList<>(fresh.allowedJoinAddresses);
+			}
+		} catch (Exception e) {
+			McpFabric.LOGGER.warn("[mcpfabric] failed to re-read allowedJoinAddresses, keeping the startup list", e);
+		}
+		return allowedJoinAddresses;
+	}
+
 	public void save() {
 		try {
 			if (source == null) {

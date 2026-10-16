@@ -18,7 +18,9 @@ import java.util.Locale;
  * Session lifecycle of the local client, so disconnect/reconnect journeys run without a human:
  * {@code connection.disconnect} leaves the current multiplayer server like the pause-menu button,
  * {@code connection.join} connects to an address listed in {@code allowedJoinAddresses} (empty by
- * default: joining is refused), and {@code connection.status} reports where the client is.
+ * default: joining is refused; the list is re-read from the config file when an address is missing,
+ * so it can be extended without restarting the game), and {@code connection.status} reports where
+ * the client is.
  */
 public final class ConnectionHandlers {
 	private ConnectionHandlers() {}
@@ -59,11 +61,17 @@ public final class ConnectionHandlers {
 		//?}
 	}
 
+	private static boolean listed(java.util.List<String> addresses, String exact) {
+		return addresses.stream()
+				.anyMatch(candidate -> candidate != null && candidate.trim().toLowerCase(Locale.ROOT).equals(exact.toLowerCase(Locale.ROOT)));
+	}
+
 	private static JsonObject join(String address) throws RpcException {
 		Minecraft mc = ClientMc.mc();
 		String exact = address == null ? "" : address.trim();
-		boolean allowed = McpFabric.config().allowedJoinAddresses.stream()
-				.anyMatch(candidate -> candidate != null && candidate.trim().toLowerCase(Locale.ROOT).equals(exact.toLowerCase(Locale.ROOT)));
+		// An address added to the config file after startup is picked up here, without a restart.
+		boolean allowed = listed(McpFabric.config().allowedJoinAddresses, exact)
+				|| listed(McpFabric.config().reloadAllowedJoinAddresses(), exact);
 		if (!allowed) throw RpcException.badRequest("Address is not in allowedJoinAddresses: " + exact);
 		if (!ServerAddress.isValidAddress(exact)) throw RpcException.badRequest("Invalid server address: " + exact);
 		if (mc.level != null || mc.player != null) throw RpcException.badRequest("Already in a world; disconnect first.");
