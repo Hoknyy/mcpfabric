@@ -4,12 +4,26 @@ Before any command, no real or unresolved player may be online on the private cl
 AA-Main's clones-restart.py reads the clone proxy (glist all) and classifies every player as
 disposable (disposablePlayerUuids) or blocking. One blocking player refuses the command
 (accepted: false), the same rule as AA-Main infra/clones-console.py for writes.
+
+Exceptions and load:
+- the exact commands that only REMOVE a right (RIGHT_REMOVALS) are never refused by the guard, so a
+  teardown deop always goes through even if a real player joined or the proxy read failed;
+- one read serves the console steps of the next GUARD_TTL_SECONDS (one panel read per step, not per
+  command; the panel answers 429 otherwise). The cache keeps the outcome of the read: a fresh
+  failed or blocking read refuses at once, a stale one is read again.
 """
 import importlib.util
 import json
+import os
 import sys
+import tempfile
+import time
 import urllib.request
 from pathlib import Path
+
+RIGHT_REMOVALS = frozenset({"deop Hokny", "deop Tikifirst"})
+GUARD_TTL_SECONDS = 5.0
+GUARD_CACHE = Path(tempfile.gettempdir()) / "mcpfabric-panel-guard.json"
 
 
 def load_restart(infra: Path):
@@ -34,7 +48,30 @@ def blocking_players(restart) -> list:
     return list(blocking)
 
 
-def main(restart_loader=load_restart, opener=None):
+def guarded_blocking(infra: Path, restart_loader, cache: Path = GUARD_CACHE, now=time.time) -> list:
+    """Blocking players, read at most once per GUARD_TTL_SECONDS; a fresh cached refusal is kept."""
+    try:
+        cached = json.loads(cache.read_text(encoding="utf-8"))
+        age = now() - float(cached["checked_at"])
+        if 0 <= age < GUARD_TTL_SECONDS and isinstance(cached.get("blocking"), list):
+            return cached["blocking"]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    restart = restart_loader(infra)
+    try:
+        blocking = blocking_players(restart)
+    except (restart.Refusal, restart.TechnicalError, OSError, ValueError, KeyError):
+        blocking = ["<players unknown>"]
+    try:
+        temporary = cache.with_name(cache.name + "." + str(os.getpid()))
+        temporary.write_text(json.dumps({"checked_at": now(), "blocking": blocking}), encoding="utf-8")
+        os.replace(temporary, cache)
+    except OSError:
+        pass
+    return blocking
+
+
+def main(restart_loader=load_restart, opener=None, cache: Path = GUARD_CACHE):
     if len(sys.argv) != 3 or sys.argv[1] != "--sources":
         raise SystemExit("usage: panel_cmd.py --sources <AA-Lato/config/sources.json>")
     sources = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
@@ -49,11 +86,7 @@ def main(restart_loader=load_restart, opener=None):
     command = payload["command"]
     if not isinstance(command, str) or not command or len(command) > 8192 or any(c in command for c in "\r\n\0"):
         raise SystemExit("invalid console command")
-    restart = restart_loader(infra)
-    try:
-        blocking = blocking_players(restart)
-    except (restart.Refusal, restart.TechnicalError, OSError, ValueError, KeyError):
-        blocking = ["<players unknown>"]
+    blocking = [] if command in RIGHT_REMOVALS else guarded_blocking(infra, restart_loader, cache)
     if blocking:
         print(json.dumps({"accepted": False, "refused": "real-or-unresolved-players", "count": len(blocking)}))
         return

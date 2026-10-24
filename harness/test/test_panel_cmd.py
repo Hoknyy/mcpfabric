@@ -70,6 +70,7 @@ class PanelCmdGuardTest(unittest.TestCase):
         self.sources.write_text(json.dumps({"aa_main_root": str(root),
                                             "secret_references": {"pterodactyl_keys": str(keys)}}), encoding="utf-8")
         self.posts = []
+        self.cache = root / "guard.json"
 
     def tearDown(self):
         sys.modules.pop("panel_transport", None)
@@ -85,7 +86,7 @@ class PanelCmdGuardTest(unittest.TestCase):
         sys.stdin = io.StringIO(json.dumps({"server": SERVER, "command": command}))
         try:
             with contextlib.redirect_stdout(out):
-                PANEL_CMD.main(restart_loader=lambda infra: restart, opener=opener)
+                PANEL_CMD.main(restart_loader=lambda infra: restart, opener=opener, cache=self.cache)
         finally:
             sys.argv, sys.stdin = argv, stdin
         return json.loads(out.getvalue())
@@ -105,8 +106,31 @@ class PanelCmdGuardTest(unittest.TestCase):
         for restart in (fake_restart(state="offline"), fake_restart(fail=TechnicalError("glist")),
                         fake_restart(fail=Refusal("identité"))):
             with self.subTest():
+                self.cache.unlink(missing_ok=True)
                 self.assertFalse(self.run_cmd(restart)["accepted"])
         self.assertEqual([], self.posts)
+
+    def test_removing_a_right_is_never_refused_even_with_a_real_player(self):
+        restart = fake_restart(blocking=["Bob"])
+        for command in ("deop Hokny", "deop Tikifirst"):
+            self.assertTrue(self.run_cmd(restart, command)["accepted"])
+        self.assertEqual(["deop Hokny", "deop Tikifirst"], self.posts)
+        self.assertEqual([], restart.calls)  # aucune lecture du proxy pour un retrait de droit
+        self.assertFalse(self.run_cmd(restart, "deop Haniki")["accepted"])
+        self.assertFalse(self.run_cmd(restart, "op Hokny")["accepted"])
+
+    def test_one_read_serves_the_next_seconds_and_a_fresh_refusal_is_kept(self):
+        restart = fake_restart()
+        for _ in range(5):
+            self.assertTrue(self.run_cmd(restart, "tellraw Hokny x")["accepted"])
+        self.assertEqual(["glist"], restart.calls)
+        cached = json.loads(self.cache.read_text(encoding="utf-8"))
+        cached["checked_at"] -= PANEL_CMD.GUARD_TTL_SECONDS + 1  # périmée : relue
+        self.cache.write_text(json.dumps(cached), encoding="utf-8")
+        blocked = fake_restart(blocking=["Bob"])
+        self.assertFalse(self.run_cmd(blocked, "tellraw Hokny x")["accepted"])
+        self.assertEqual(["glist"], blocked.calls)
+        self.assertFalse(self.run_cmd(fake_restart(), "tellraw Hokny x")["accepted"])  # refus frais gardé
 
 
 if __name__ == "__main__":
