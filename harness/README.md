@@ -68,6 +68,12 @@ teardown:
   occupe toute la valeur conserve le type (objet/nombre). Une variable inconnue fait échouer.
 - `console: {server, command}` : fixture exécutée par le transport canonique AA-Main,
   sur compte jetable uniquement. Ajouter ensuite une assertion de l'état réellement obtenu.
+  Garde (`panel_cmd.py`) : refus tant qu'un joueur réel ou non résolu est sur le proxy clone
+  (lecture par `clones-restart.py` d'AA-Main), sauf les retraits de droit exacts
+  `deop Hokny` et `deop Tikifirst`. Limites acceptées (relecture Repli, 2026-10-24) :
+  un joueur réel qui arrive dans les 5 s après une lecture vide n'est vu qu'à la lecture
+  suivante ; le cache est un fichier temporaire partagé, non clé par cible : si le harnais
+  vise un jour un autre réseau, clé le cache par cible.
 - `teardown` : exécuté même après échec. `when: nomSauvegarde` conditionne un nettoyage
   à une étape effectivement réussie. Une étape de cleanup qui échoue bloque ses étapes
   suivantes pour éviter d'agir à partir d'une précondition fausse.
